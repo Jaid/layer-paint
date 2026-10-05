@@ -1,4 +1,5 @@
 import type {AlignmentResult, GrayImage} from './align.ts'
+
 import {align} from './align.ts'
 
 export type AlignmentRequest = {
@@ -17,8 +18,14 @@ addEventListener('message', (event: MessageEvent<AlignmentRequest>) => {
   const {id, input, output} = event.data
   try {
     const result = align(input, output)
-    postMessage({id, result} satisfies AlignmentResponse)
+    postMessage({
+      id,
+      result,
+    } satisfies AlignmentResponse)
   } catch (error) {
-    postMessage({id, error: String(error)} satisfies AlignmentResponse)
+    postMessage({
+      id,
+      error: String(error),
+    } satisfies AlignmentResponse)
   }
 })

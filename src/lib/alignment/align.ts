@@ -27,7 +27,11 @@ export type AlignmentResult = {
   score: number
 }
 
-export const identityPlacement: Placement = {x: 0, y: 0, scale: 1}
+export const identityPlacement: Placement = {
+  x: 0,
+  y: 0,
+  scale: 1,
+}
 
 export const toGray = (rgba: Uint8ClampedArray, width: number, height: number): GrayImage => {
   const data = new Float32Array(width * height)
@@ -35,7 +39,11 @@ export const toGray = (rgba: Uint8ClampedArray, width: number, height: number): 
     const offset = index * 4
     data[index] = 0.2126 * rgba[offset] + 0.7152 * rgba[offset + 1] + 0.0722 * rgba[offset + 2]
   }
-  return {data, width, height}
+  return {
+    data,
+    width,
+    height,
+  }
 }
 
 /** separable box blur, applied twice for an approximately Gaussian kernel */
@@ -53,10 +61,11 @@ export const blur = (image: GrayImage, radius: number): GrayImage => {
         let count = 0
         for (let offset = -radius; offset <= radius; offset++) {
           const sampleX = x + offset
-          if (sampleX >= 0 && sampleX < width) {
-            sum += source[y * width + sampleX]
-            count++
+          if (!(sampleX >= 0 && sampleX < width)) {
+            continue
           }
+          sum += source[y * width + sampleX]
+          count++
         }
         target[y * width + x] = sum / count
       }
@@ -68,17 +77,22 @@ export const blur = (image: GrayImage, radius: number): GrayImage => {
         let count = 0
         for (let offset = -radius; offset <= radius; offset++) {
           const sampleY = y + offset
-          if (sampleY >= 0 && sampleY < height) {
-            sum += source[sampleY * width + x]
-            count++
+          if (!(sampleY >= 0 && sampleY < height)) {
+            continue
           }
+          sum += source[sampleY * width + x]
+          count++
         }
         target[y * width + x] = sum / count
       }
     }
     ;[source, target] = [target, source]
   }
-  return {data: source, width, height}
+  return {
+    data: source,
+    width,
+    height,
+  }
 }
 
 /** bilinear sample at normalized coordinates, NaN outside */
@@ -120,9 +134,12 @@ const createGrid = (output: GrayImage, columns: number, rows: number): SampleGri
       index++
     }
   }
-  return {u, v, values}
+  return {
+    u,
+    v,
+    values,
+  }
 }
-
 const minOverlap = 0.35
 
 /** normalized cross-correlation between the output grid and the input under a placement; overlap below the minimum scores −1 */
@@ -188,47 +205,95 @@ export const align = (input: GrayImage, output: GrayImage, options: AlignOptions
     const centerOffset = (1 - scale) / 2
     for (let x = centerOffset - maxShift; x <= centerOffset + maxShift + 1e-9; x += shiftStep) {
       for (let y = centerOffset - maxShift; y <= centerOffset + maxShift + 1e-9; y += shiftStep) {
-        const score = scorePlacement(blurredInput, coarseGrid, {x, y, scale})
-        coarse.push({x, y, scale, score})
+        const score = scorePlacement(blurredInput, coarseGrid, {
+          x,
+          y,
+          scale,
+        })
+        coarse.push({
+          x,
+          y,
+          scale,
+          score,
+        })
       }
     }
   }
   coarse.sort((a, b) => b.score - a.score)
-  let best: Candidate = {...identityPlacement, score: baseline}
+  let best: Candidate = {
+    ...identityPlacement,
+    score: baseline,
+  }
   for (const start of coarse.slice(0, 6)) {
-    let current: Candidate = {...start, score: scorePlacement(blurredInput, fineGrid, start)}
+    let current: Candidate = {
+      ...start,
+      score: scorePlacement(blurredInput, fineGrid, start),
+    }
     let step = shiftStep
     let scaleFactor = (maxScale / minScale) ** (1 / scaleSteps)
     while (step > 0.0015) {
       let improved = false
       const neighbors: Array<Placement> = [
-        {...current, x: current.x + step},
-        {...current, x: current.x - step},
-        {...current, y: current.y + step},
-        {...current, y: current.y - step},
-        {x: current.x - current.scale * (scaleFactor - 1) / 2, y: current.y - current.scale * (scaleFactor - 1) / 2, scale: current.scale * scaleFactor},
-        {x: current.x + current.scale * (1 - 1 / scaleFactor) / 2, y: current.y + current.scale * (1 - 1 / scaleFactor) / 2, scale: current.scale / scaleFactor},
+        {
+          ...current,
+          x: current.x + step,
+        },
+        {
+          ...current,
+          x: current.x - step,
+        },
+        {
+          ...current,
+          y: current.y + step,
+        },
+        {
+          ...current,
+          y: current.y - step,
+        },
+        {
+          x: current.x - current.scale * (scaleFactor - 1) / 2,
+          y: current.y - current.scale * (scaleFactor - 1) / 2,
+          scale: current.scale * scaleFactor,
+        },
+        {
+          x: current.x + current.scale * (1 - 1 / scaleFactor) / 2,
+          y: current.y + current.scale * (1 - 1 / scaleFactor) / 2,
+          scale: current.scale / scaleFactor,
+        },
       ]
       for (const neighbor of neighbors) {
         if (neighbor.scale < minScale || neighbor.scale > maxScale) {
           continue
         }
         const score = scorePlacement(blurredInput, fineGrid, neighbor)
-        if (score > current.score + 1e-5) {
-          current = {...neighbor, score}
-          improved = true
+        if (!(score > current.score + 1e-5)) {
+          continue
         }
+        current = {
+          ...neighbor,
+          score,
+        }
+        improved = true
       }
-      if (!improved) {
-        step /= 2
-        scaleFactor = Math.sqrt(scaleFactor)
+      if (improved) {
+        continue
       }
+      step /= 2
+      scaleFactor = Math.sqrt(scaleFactor)
     }
     if (current.score > best.score) {
       best = current
     }
   }
-  return {baseline, score: best.score, placement: {x: best.x, y: best.y, scale: best.scale}}
+  return {
+    baseline,
+    score: best.score,
+    placement: {
+      x: best.x,
+      y: best.y,
+      scale: best.scale,
+    },
+  }
 }
 
 export type AlignmentDecision = {
@@ -242,14 +307,26 @@ export const decideAlignment = (result: AlignmentResult): AlignmentDecision => {
   const shift = Math.hypot(placement.x + (placement.scale - 1) / 2, placement.y + (placement.scale - 1) / 2)
   const scaleChange = Math.abs(Math.log(placement.scale))
   if (shift < 0.008 && scaleChange < 0.01) {
-    return {apply: false, reason: 'already aligned'}
+    return {
+      apply: false,
+      reason: 'already aligned',
+    }
   }
   // Real misalignments of faithful edits register at ≥ 0.8, while substantial edits (a hand now holding a cup) only reach ~0.65 at a wrong spot.
   if (result.score < 0.76) {
-    return {apply: false, reason: 'no reliable match'}
+    return {
+      apply: false,
+      reason: 'no reliable match',
+    }
   }
   if (result.score - result.baseline < 0.12) {
-    return {apply: false, reason: 'no significant improvement'}
+    return {
+      apply: false,
+      reason: 'no significant improvement',
+    }
   }
-  return {apply: true, reason: 'misaligned output'}
+  return {
+    apply: true,
+    reason: 'misaligned output',
+  }
 }

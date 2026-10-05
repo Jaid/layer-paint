@@ -1,5 +1,7 @@
-import {createId} from '#src/lib/createId.ts'
 import type {Notice} from './state.ts'
+
+import {createId} from '#src/lib/createId.ts'
+
 import {editorStore} from './state.ts'
 
 const defaultDurations: Record<Notice['kind'], number> = {
@@ -9,12 +11,22 @@ const defaultDurations: Record<Notice['kind'], number> = {
 }
 
 export const dismissNotice = (id: string) => {
-  editorStore.set(state => ({...state, notices: state.notices.filter(notice => notice.id !== id)}))
+  editorStore.set(state => ({
+    ...state,
+    notices: state.notices.filter(notice => notice.id !== id),
+  }))
 }
 
 export const notify = (kind: Notice['kind'], text: string, duration = defaultDurations[kind]) => {
   const id = createId()
-  editorStore.set(state => ({...state, notices: [...state.notices.slice(-4), {id, kind, text}]}))
+  editorStore.set(state => ({
+    ...state,
+    notices: [...state.notices.slice(-4), {
+      id,
+      kind,
+      text,
+    }],
+  }))
   if (duration > 0) {
     setTimeout(() => dismissNotice(id), duration)
   }
@@ -22,7 +34,7 @@ export const notify = (kind: Notice['kind'], text: string, duration = defaultDur
 }
 
 export const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
+  if (Error.isError(error)) {
     return error.message
   }
   return String(error)

@@ -1,18 +1,21 @@
 import type {Rect} from '#src/lib/geometry.ts'
 import type {AlignmentResult, GrayImage, Placement} from './align.ts'
 import type {AlignmentRequest, AlignmentResponse} from './worker.ts'
+
 import {createCanvas, fitWithin, getContext} from '#src/lib/image.ts'
+
 import {decideAlignment, toGray} from './align.ts'
 
 const analysisSide = 128
-
 let worker: Worker | undefined
 let nextId = 0
-const pending = new Map<number, PromiseWithResolvers<AlignmentResult>>()
-
+const pending = new Map<number, PromiseWithResolvers<AlignmentResult>>
 const getWorker = () => {
   if (!worker) {
-    worker = new Worker(new URL('worker.ts', import.meta.url), {type: 'module', name: 'alignment'})
+    worker = new Worker(new URL('worker.ts', import.meta.url), {
+      type: 'module',
+      name: 'alignment',
+    })
     worker.addEventListener('message', (event: MessageEvent<AlignmentResponse>) => {
       const request = pending.get(event.data.id)
       pending.delete(event.data.id)
@@ -25,10 +28,14 @@ const getWorker = () => {
   }
   return worker
 }
-
-const toAnalysisImage = (source: CanvasImageSource & {height: number
-  width: number}, aspect: number): GrayImage => {
-  const size = fitWithin({width: analysisSide * aspect, height: analysisSide}, analysisSide)
+const toAnalysisImage = (source: CanvasImageSource & {
+  height: number
+  width: number
+}, aspect: number): GrayImage => {
+  const size = fitWithin({
+    width: analysisSide * aspect,
+    height: analysisSide,
+  }, analysisSide)
   const canvas = createCanvas(size.width, size.height)
   const context = getContext(canvas)
   context.drawImage(source, 0, 0, canvas.width, canvas.height)
@@ -56,7 +63,11 @@ export const registerOutput = async (input: OffscreenCanvas, output: ImageBitmap
   getWorker().postMessage(request, [request.input.data.buffer, request.output.data.buffer])
   const result = await resolvers.promise
   const decision = decideAlignment(result)
-  return {...result, applied: decision.apply, reason: decision.reason}
+  return {
+    ...result,
+    applied: decision.apply,
+    reason: decision.reason,
+  }
 }
 
 export const placementToRect = (frame: Rect, placement: Placement): Rect => ({

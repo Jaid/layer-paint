@@ -23,10 +23,11 @@ export const closestRatio = <RatioGeneric extends string>(aspect: number, ratios
   let bestDistance = Number.POSITIVE_INFINITY
   for (const ratio of ratios) {
     const distance = Math.abs(Math.log(parseRatio(ratio) / aspect))
-    if (distance < bestDistance) {
-      best = ratio
-      bestDistance = distance
+    if (!(distance < bestDistance)) {
+      continue
     }
+    best = ratio
+    bestDistance = distance
   }
   return best
 }

@@ -1,4 +1,5 @@
 import type {Updater} from './Store.ts'
+
 import {Store} from './Store.ts'
 
 export type CommitOptions = {
@@ -21,18 +22,18 @@ export type HistoryMeta = {
 
 /** store with linear undo/redo history of immutable snapshots */
 export class HistoryStore<StateGeneric extends object> extends Store<StateGeneric> {
-  #past: Array<StateGeneric> = []
+  readonly meta = new Store<HistoryMeta>({
+    canUndo: false,
+    canRedo: false,
+  })
   #future: Array<StateGeneric> = []
   #lastKey: string | undefined
   #lastTime = 0
-  readonly meta = new Store<HistoryMeta>({canUndo: false, canRedo: false})
+  #past: Array<StateGeneric> = []
 
-  #syncMeta() {
-    const canUndo = this.#past.length > 0
-    const canRedo = this.#future.length > 0
-    if (canUndo !== this.meta.state.canUndo || canRedo !== this.meta.state.canRedo) {
-      this.meta.set({canUndo, canRedo})
-    }
+  /** every state that is still reachable through undo/redo, including the present */
+  get reachableStates(): ReadonlyArray<StateGeneric> {
+    return [...this.#past, this.state, ...this.#future]
   }
 
   commit(updater: Updater<StateGeneric>, options: CommitOptions = {}) {
@@ -53,6 +54,18 @@ export class HistoryStore<StateGeneric extends object> extends Store<StateGeneri
     this.#future = []
     this.replace(next)
     this.#syncMeta()
+  }
+
+  redo() {
+    const next = this.#future.pop()
+    if (!next) {
+      return false
+    }
+    this.#past.push(this.state)
+    this.#lastKey = undefined
+    this.replace(next)
+    this.#syncMeta()
+    return true
   }
 
   /** replaces the state and discards the whole history, e.g. after loading a project */
@@ -81,20 +94,14 @@ export class HistoryStore<StateGeneric extends object> extends Store<StateGeneri
     return true
   }
 
-  redo() {
-    const next = this.#future.pop()
-    if (!next) {
-      return false
+  #syncMeta() {
+    const canUndo = this.#past.length > 0
+    const canRedo = this.#future.length > 0
+    if (canUndo !== this.meta.state.canUndo || canRedo !== this.meta.state.canRedo) {
+      this.meta.set({
+        canUndo,
+        canRedo,
+      })
     }
-    this.#past.push(this.state)
-    this.#lastKey = undefined
-    this.replace(next)
-    this.#syncMeta()
-    return true
-  }
-
-  /** every state that is still reachable through undo/redo, including the present */
-  get reachableStates(): ReadonlyArray<StateGeneric> {
-    return [...this.#past, this.state, ...this.#future]
   }
 }

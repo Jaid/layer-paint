@@ -1,8 +1,11 @@
 import type {DragEvent, PropsWithChildren} from 'react'
 import type {DropEvent} from 'react-dropzone'
+
 import {createContext, useContext, useState} from 'react'
 import {useDropzone} from 'react-dropzone'
+
 import {routeDroppedFiles} from '#src/lib/drop.ts'
+
 import css from './style.module.sass'
 
 export type DropTarget = 'canvas' | 'editor'
@@ -12,7 +15,10 @@ export type DropzoneState = {
   target: DropTarget | null
 }
 
-const DropzoneContext = createContext<DropzoneState>({active: false, target: null})
+const DropzoneContext = createContext<DropzoneState>({
+  active: false,
+  target: null,
+})
 
 export const useDropzoneState = () => useContext(DropzoneContext)
 
@@ -23,13 +29,14 @@ const getDropTarget = (element: EventTarget | null): DropTarget | null => {
   const target = element.closest<HTMLElement>('[data-drop-target]')?.dataset.dropTarget
   return target === 'canvas' || target === 'editor' ? target : null
 }
-
 const getEventPoint = (event: DropEvent) => {
   if ('clientX' in event && typeof event.clientX === 'number') {
-    return {x: event.clientX, y: event.clientY}
+    return {
+      x: event.clientX,
+      y: event.clientY,
+    }
   }
 }
-
 /** Routes dropped files to the half they were dropped on: the canvas creates layers, the editor creates prompt ingredients. */
 const Dropzone = ({children}: PropsWithChildren) => {
   const [target, setTarget] = useState<DropTarget | null>(null)
@@ -54,9 +61,19 @@ const Dropzone = ({children}: PropsWithChildren) => {
       setTarget(next)
     }
   }
-  return <DropzoneContext value={{active: isDragActive, target: isDragActive ? target : null}}>
-    <div {...getRootProps({className: css.container, onDragOver: handleDragOver})}>
-      <input {...getInputProps()}/>
+  return <DropzoneContext
+    value={{
+      active: isDragActive,
+      target: isDragActive ? target : null,
+    }}
+  >
+    <div
+      {...getRootProps({
+        className: css.container,
+        onDragOver: handleDragOver,
+      })}
+    >
+      <input {...getInputProps()} />
       {children}
     </div>
   </DropzoneContext>

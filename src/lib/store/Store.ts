@@ -1,11 +1,20 @@
-type Listener = () => void
+export type Updater<StateGeneric> = ((state: StateGeneric) => StateGeneric) | Partial<StateGeneric>
 
-export type Updater<StateGeneric> = Partial<StateGeneric> | ((state: StateGeneric) => StateGeneric)
+type Listener = () => void
 
 /** minimal immutable external store, compatible with React’s useSyncExternalStore */
 export class Store<StateGeneric extends object> {
+  readonly getSnapshot = () => this.#state
+  readonly subscribe = (listener: Listener) => {
+    this.#listeners.add(listener)
+    return () => {
+      this.#listeners.delete(listener)
+    }
+  }
+
+  readonly #listeners = new Set<Listener>
+
   #state: StateGeneric
-  readonly #listeners = new Set<Listener>()
 
   constructor(initialState: StateGeneric) {
     this.#state = initialState
@@ -29,19 +38,13 @@ export class Store<StateGeneric extends object> {
     if (typeof updater === 'function') {
       return updater(this.#state)
     }
-    return {...this.#state, ...updater}
+    return {
+      ...this.#state,
+      ...updater,
+    }
   }
 
   set(updater: Updater<StateGeneric>) {
     this.replace(this.resolve(updater))
   }
-
-  readonly subscribe = (listener: Listener) => {
-    this.#listeners.add(listener)
-    return () => {
-      this.#listeners.delete(listener)
-    }
-  }
-
-  readonly getSnapshot = () => this.#state
 }

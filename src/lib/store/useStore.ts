@@ -1,4 +1,5 @@
 import type {Store} from './Store.ts'
+
 import {useSyncExternalStore} from 'react'
 
 /** Subscribes to a store; the selector must return a value that is referentially stable for an unchanged state. */

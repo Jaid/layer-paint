@@ -1,5 +1,6 @@
 import {editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
+
 import css from './style.module.sass'
 
 const examples = [
@@ -7,7 +8,6 @@ const examples = [
   'Please put a ring on the finger of ![0]',
   'Please restyle this to be a beautiful artistic oil painting',
 ]
-
 /** short onboarding shown in the empty prompt editor */
 const PromptTips = () => {
   const empty = useStore(editorStore, state => state.prompt.trim() === '')

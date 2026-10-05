@@ -1,18 +1,16 @@
-import readPermalink,{parseBoolean,parseNumber} from 'read-permalink'
+import readPermalink, {parseBoolean, parseNumber} from 'read-permalink'
 
 const optionalString = (value: unknown) => (value === undefined || value === null ? '' : String(value))
-
 const fraction = (value: unknown) => {
   const number = parseNumber(value)
   // Percentages like “35” are accepted as well as fractions like “0.35”.
   const normalized = number > 1 ? number / 100 : number
   return Math.min(1, Math.max(0, normalized))
 }
-
 const queryParameters = readPermalink(typeof location === 'undefined' ? '' : location.href, {schema: {
   defaults: {
     /** OpenRouter image model to use, with or without vendor prefix */
-    model: 'google\u002Fgemini-3.1-flash-lite-image',
+    model: 'google\u{2F}gemini-3.1-flash-lite-image',
     /** frame aspect ratio like “16:9”; falls back to the closest ratio the model supports */
     ratio: '1:1',
     /** resolution tier like “1K”, “2K” or “4K”; empty uses the model default */

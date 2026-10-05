@@ -1,5 +1,7 @@
-import {createId} from '#src/lib/createId.ts'
 import type {DecodedImage} from './image.ts'
+
+import {createId} from '#src/lib/createId.ts'
+
 import {decodeImage} from './image.ts'
 
 /** an immutable decoded image shared by layers, ingredients and undo history */
@@ -17,40 +19,9 @@ export type Asset = {
 type AssetListener = () => void
 
 export class AssetRegistry {
-  readonly #assets = new Map<string, Asset>()
-  readonly #listeners = new Set<AssetListener>()
-  readonly #pins = new Map<string, number>()
-  pin(ids: Iterable<string>) {
-    const values = [...new Set(ids)]
-    for (const id of values) this.#pins.set(id, (this.#pins.get(id) ?? 0) + 1)
-    let released = false
-    return () => {
-      if (released) return
-      released = true
-      for (const id of values) {
-        const next = (this.#pins.get(id) ?? 1) - 1
-        if (next) this.#pins.set(id, next)
-        else this.#pins.delete(id)
-      }
-    }
-  }
-
-  get(id: string) {
-    return this.#assets.get(id)
-  }
-
-  require(id: string) {
-    const asset = this.#assets.get(id)
-    if (!asset) {
-      throw new Error(`Image ${id} is missing`)
-    }
-    return asset
-  }
-
-  has(id: string) {
-    return this.#assets.has(id)
-  }
-
+  readonly #assets = new Map<string, Asset>
+  readonly #listeners = new Set<AssetListener>
+  readonly #pins = new Map<string, number>
   get ids() {
     return [...this.#assets.keys()]
   }
@@ -58,7 +29,9 @@ export class AssetRegistry {
   async add(blob: Blob, decoded?: DecodedImage, id: string = createId()) {
     if (this.#assets.has(id)) {
       const existing = this.#assets.get(id)!
-      if (existing.blob === blob) return existing
+      if (existing.blob === blob) {
+        return existing
+      }
       throw new Error('Asset identifiers are immutable; import must allocate a fresh ID.')
     }
     const image = decoded ?? await decodeImage(blob)
@@ -78,6 +51,48 @@ export class AssetRegistry {
     return asset
   }
 
+  clear() {
+    this.retain(new Set, 0)
+  }
+
+  get(id: string) {
+    return this.#assets.get(id)
+  }
+
+  has(id: string) {
+    return this.#assets.has(id)
+  }
+
+  pin(ids: Iterable<string>) {
+    const values = [...new Set(ids)]
+    for (const id of values) {
+      this.#pins.set(id, (this.#pins.get(id) ?? 0) + 1)
+    }
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      for (const id of values) {
+        const next = (this.#pins.get(id) ?? 1) - 1
+        if (next) {
+          this.#pins.set(id, next)
+        } else {
+          this.#pins.delete(id)
+        }
+      }
+    }
+  }
+
+  require(id: string) {
+    const asset = this.#assets.get(id)
+    if (!asset) {
+      throw new Error(`Image ${id} is missing`)
+    }
+    return asset
+  }
+
   /**
    * Frees every asset that is not in the keep set.
    * Assets younger than the grace period are kept because they may be awaiting their commit into the document.
@@ -92,10 +107,6 @@ export class AssetRegistry {
       asset.bitmap.close()
       this.#assets.delete(id)
     }
-  }
-
-  clear() {
-    this.retain(new Set, 0)
   }
 
   subscribe(listener: AssetListener) {

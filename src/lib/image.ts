@@ -11,7 +11,6 @@ export const upstreamMediaTypes = new Set(['image/jpeg', 'image/png', 'image/web
 
 /** formats that browsers display natively and that are kept unchanged when imported as layers */
 const retainedMediaTypes = upstreamMediaTypes
-
 const extensionMediaTypes: Record<string, string> = {
   avif: 'image/avif',
   bmp: 'image/bmp',
@@ -42,7 +41,6 @@ export const getMediaType = (file: Blob & {name?: string}) => {
 export const looksLikeImage = (file: Blob & {name?: string}) => getMediaType(file).startsWith('image/')
 
 const fallbackVectorSize = 1024
-
 const decodeWithElement = async (blob: Blob): Promise<DecodedImage> => {
   const url = URL.createObjectURL(blob)
   try {
@@ -63,29 +61,51 @@ const decodeWithElement = async (blob: Blob): Promise<DecodedImage> => {
       width = Math.round(width * scale)
       height = Math.round(height * scale)
     }
-    const bitmap = await createImageBitmap(image, {resizeWidth: width, resizeHeight: height, resizeQuality: 'high'})
+    const bitmap = await createImageBitmap(image, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: 'high',
+    })
     validateDimensions(bitmap.width, bitmap.height)
-    return {bitmap, width: bitmap.width, height: bitmap.height}
+    return {
+      bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+    }
   } finally {
     URL.revokeObjectURL(url)
   }
 }
 
 export const decodeImage = async (blob: Blob): Promise<DecodedImage> => {
-  if (blob.size > 40_000_000) throw new Error('Choose a source image smaller than 40 mb.')
+  if (blob.size > 40_000_000) {
+    throw new Error('Choose a source image smaller than 40 mb.')
+  }
   if (blob.type === 'image/jxl') {
     const image = await decodeJxl(await blob.arrayBuffer())
     validateDimensions(image.width, image.height)
     const canvas = createCanvas(image.width, image.height)
     getContext(canvas).putImageData(new ImageData(new Uint8ClampedArray(image.data.buffer, image.data.byteOffset, image.data.byteLength), image.width, image.height), 0, 0)
     const bitmap = await createImageBitmap(canvas)
-    return {bitmap, width: bitmap.width, height: bitmap.height}
+    return {
+      bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+    }
   }
   if (blob.type !== 'image/svg+xml') {
     try {
       const bitmap = await createImageBitmap(blob)
-      try {validateDimensions(bitmap.width, bitmap.height)} catch (error) {bitmap.close(); throw error}
-      return {bitmap, width: bitmap.width, height: bitmap.height}
+      try {
+        validateDimensions(bitmap.width, bitmap.height)
+      } catch (error) {
+        bitmap.close(); throw error
+      }
+      return {
+        bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+      }
     } catch {}
   }
   try {
@@ -95,10 +115,12 @@ export const decodeImage = async (blob: Blob): Promise<DecodedImage> => {
   }
 }
 
-export const MAX_EDGE = 16384
+export const MAX_EDGE = 16_384
 export const MAX_PIXELS = 64_000_000
 export function validateDimensions(width: number, height: number) {
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width > MAX_EDGE || height > MAX_EDGE || width * height > MAX_PIXELS) throw new Error('This image exceeds the 64-megapixel or 16,384-pixel edge limit. Choose a smaller export scale or frame.')
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width > MAX_EDGE || height > MAX_EDGE || width * height > MAX_PIXELS) {
+    throw new Error('This image exceeds the 64-megapixel or 16,384-pixel edge limit. Choose a smaller export scale or frame.')
+  }
 }
 export const createCanvas = (width: number, height: number) => {
   width = Math.max(1, Math.round(width)); height = Math.max(1, Math.round(height))
@@ -116,15 +138,24 @@ export const getContext = (canvas: OffscreenCanvas) => {
   return context
 }
 
-export const encodeCanvas = (canvas: OffscreenCanvas, format: ExportFormat = 'png', quality?: number) => canvas.convertToBlob({type: `image/${format}`, quality})
+export const encodeCanvas = (canvas: OffscreenCanvas, format: ExportFormat = 'png', quality?: number) => canvas.convertToBlob({
+  type: `image/${format}`,
+  quality,
+})
 
 export const fitWithin = (size: Size, maxSide: number): Size => {
   const longSide = Math.max(size.width, size.height)
   if (longSide <= maxSide) {
-    return {width: size.width, height: size.height}
+    return {
+      width: size.width,
+      height: size.height,
+    }
   }
   const scale = maxSide / longSide
-  return {width: Math.max(1, Math.round(size.width * scale)), height: Math.max(1, Math.round(size.height * scale))}
+  return {
+    width: Math.max(1, Math.round(size.width * scale)),
+    height: Math.max(1, Math.round(size.height * scale)),
+  }
 }
 
 export const drawScaled = (bitmap: ImageBitmap, size: Size, background?: string) => {
@@ -144,12 +175,20 @@ export const normalizeImportedImage = async (file: Blob & {name?: string}) => {
   const typed = file.type === mediaType ? file : new Blob([file], {type: mediaType})
   const decoded = await decodeImage(typed)
   if (retainedMediaTypes.has(mediaType)) {
-    return {blob: typed, decoded}
+    return {
+      blob: typed,
+      decoded,
+    }
   }
   try {
     const blob = await encodeCanvas(drawScaled(decoded.bitmap, decoded), 'webp', 1)
-    return {blob, decoded: await decodeImage(blob)}
-  } finally {decoded.bitmap.close()}
+    return {
+      blob,
+      decoded: await decodeImage(blob),
+    }
+  } finally {
+    decoded.bitmap.close()
+  }
 }
 
 export const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
@@ -174,14 +213,23 @@ export const prepareUpstreamImage = async (blob: Blob, decoded?: DecodedImage): 
   const isAccepted = upstreamMediaTypes.has(blob.type)
   const isSmallEnough = Math.max(image.width, image.height) <= maxUpstreamSide && blob.size <= maxUpstreamBytes
   if (isAccepted && isSmallEnough) {
-    return {blob, dataUrl: await blobToDataUrl(blob)}
+    return {
+      blob,
+      dataUrl: await blobToDataUrl(blob),
+    }
   }
   const converted = await encodeCanvas(drawScaled(image.bitmap, fitWithin(image, maxUpstreamSide)), 'webp', 0.94)
-  return {blob: converted, dataUrl: await blobToDataUrl(converted)}
+  return {
+    blob: converted,
+    dataUrl: await blobToDataUrl(converted),
+  }
 }
 
 export const createThumbnailDataUrl = async (bitmap: ImageBitmap, maxSide = 192) => {
-  const canvas = drawScaled(bitmap, fitWithin({width: bitmap.width, height: bitmap.height}, maxSide))
+  const canvas = drawScaled(bitmap, fitWithin({
+    width: bitmap.width,
+    height: bitmap.height,
+  }, maxSide))
   return blobToDataUrl(await encodeCanvas(canvas, 'webp', 0.85))
 }
 
@@ -192,17 +240,27 @@ export const base64ToBlob = (base64: string, mediaType: string) => {
 
 /** Sol's worker decoder, adapted to the shared immutable-asset pipeline. */
 async function decodeJxl(buffer: ArrayBuffer): Promise<ImageData> {
-  const worker = new Worker(new URL('./codecs/jxl.worker.ts', import.meta.url), {type: 'module'})
+  const worker = new Worker(new URL('codecs/jxl.worker.ts', import.meta.url), {type: 'module'})
   try {
     return await new Promise<ImageData>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('JPEG XL decoding timed out.')), 30_000)
-      worker.onmessage = (event: MessageEvent<{image?: ImageData; error?: string}>) => {
+      worker.onmessage = (event: MessageEvent<{
+        error?: string
+        image?: ImageData
+      }>) => {
         clearTimeout(timeout)
-        if (event.data.image) resolve(event.data.image)
-        else reject(new Error(event.data.error ?? 'JPEG XL decoding failed.'))
+        if (event.data.image) {
+          resolve(event.data.image)
+        } else {
+          reject(new Error(event.data.error ?? 'JPEG XL decoding failed.'))
+        }
       }
-      worker.onerror = () => {clearTimeout(timeout); reject(new Error('The JPEG XL decoder could not start.'))}
+      worker.onerror = () => {
+        clearTimeout(timeout); reject(new Error('The JPEG XL decoder could not start.'))
+      }
       worker.postMessage(buffer, [buffer])
     })
-  } finally {worker.terminate()}
+  } finally {
+    worker.terminate()
+  }
 }

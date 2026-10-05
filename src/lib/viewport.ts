@@ -1,5 +1,6 @@
 import type {Point, Rect, Size} from './geometry.ts'
 import type {View} from './state.ts'
+
 import {clamp} from './geometry.ts'
 import {editorStore} from './state.ts'
 
@@ -7,7 +8,10 @@ export const minScale = 0.02
 export const maxScale = 32
 
 /** the current size of the canvas viewport element, maintained by the Viewport component */
-export const viewportSize: Size = {width: 800, height: 600}
+export const viewportSize: Size = {
+  width: 800,
+  height: 600,
+}
 
 const viewportReadyResolvers = Promise.withResolvers<void>()
 
@@ -22,7 +26,14 @@ export const setViewportSize = (size: Size) => {
     const deltaX = (size.width - viewportSize.width) / 2
     const deltaY = (size.height - viewportSize.height) / 2
     if (deltaX || deltaY) {
-      editorStore.set(state => ({...state, view: {...state.view, x: state.view.x + deltaX, y: state.view.y + deltaY}}))
+      editorStore.set(state => ({
+        ...state,
+        view: {
+          ...state.view,
+          x: state.view.x + deltaX,
+          y: state.view.y + deltaY,
+        },
+      }))
     }
   }
   viewportSize.width = size.width
@@ -51,7 +62,12 @@ export type Insets = {
 }
 
 /** Space covered by floating UI (frame label on top, toolbar at the bottom, layers panel on the right). */
-export const getOverlayInsets = (_size: Size = viewportSize): Insets => ({top: 44, bottom: 24, left: 22, right: 22})
+export const getOverlayInsets = (_size: Size = viewportSize): Insets => ({
+  top: 44,
+  bottom: 24,
+  left: 22,
+  right: 22,
+})
 
 export const getViewForRect = (rect: Rect, size: Size = viewportSize, insets: Insets = getOverlayInsets(size), padding = 0.06): View => {
   const paddingPixels = Math.min(size.width, size.height) * padding
@@ -83,7 +99,16 @@ export const zoomView = (view: View, factor: number, anchor: Point): View => {
 }
 
 export const zoomBy = (factor: number) => {
-  editorStore.set(state => ({...state, view: zoomView(state.view, factor, {x: viewportSize.width / 2, y: viewportSize.height / 2})}))
+  editorStore.set(state => ({
+    ...state,
+    view: zoomView(state.view, factor, {
+      x: viewportSize.width / 2,
+      y: viewportSize.height / 2,
+    }),
+  }))
 }
 
-export const getViewportCenterWorld = () => screenToWorld(editorStore.state.view, {x: viewportSize.width / 2, y: viewportSize.height / 2})
+export const getViewportCenterWorld = () => screenToWorld(editorStore.state.view, {
+  x: viewportSize.width / 2,
+  y: viewportSize.height / 2,
+})

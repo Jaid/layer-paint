@@ -1,8 +1,10 @@
-import {createId} from '#src/lib/createId.ts'
 import type {Point, Rect} from './geometry.ts'
-import type {Ingredient, Layer, ProjectDocument} from './state.ts'
 import type {RatioString} from './ratio.ts'
+import type {Ingredient, Layer, ProjectDocument} from './state.ts'
 import type {CommitOptions} from './store/index.ts'
+
+import {createId} from '#src/lib/createId.ts'
+
 import {assets} from './assets.ts'
 import {getContentBounds} from './composite.ts'
 import {containSize, coverRect, rectCenter, rectFromCenter, sizeFromArea} from './geometry.ts'
@@ -28,7 +30,11 @@ export const setRatio = (ratio: RatioString) => {
   editorStore.set(state => {
     const {frame} = state
     const size = sizeFromArea(frame.width * frame.height, parseRatio(ratio))
-    return {...state, ratio, frame: rectFromCenter(rectCenter(frame), size)}
+    return {
+      ...state,
+      ratio,
+      frame: rectFromCenter(rectCenter(frame), size),
+    }
   })
 }
 
@@ -36,7 +42,10 @@ export const setRatio = (ratio: RatioString) => {
 export const fitFrameToRect = (target: Rect) => {
   const model = getModel(editorStore.state.modelId)
   const ratio = closestRatio(target.width / target.height, model.aspectRatios)
-  editorStore.set({ratio, frame: coverRect(target, parseRatio(ratio))})
+  editorStore.set({
+    ratio,
+    frame: coverRect(target, parseRatio(ratio)),
+  })
 }
 
 export const fitFrameToContent = () => {
@@ -89,7 +98,10 @@ export const setPrompt = (prompt: string) => {
 
 export const selectLayer = (id: string | null) => {
   if (editorStore.state.selectedLayerId !== id) {
-    editorStore.set({selectedLayerId: id, ...(editorStore.state.tool === 'mask' && (id === null || projectStore.state.layers[0]?.id === id) ? {tool: 'frame' as const} : {})})
+    editorStore.set({
+      selectedLayerId: id,
+      ...editorStore.state.tool === 'mask' && (id === null || projectStore.state.layers[0]?.id === id) ? {tool: 'frame' as const} : {},
+    })
   }
 }
 
@@ -98,7 +110,7 @@ const mapLayers = (document: ProjectDocument, id: string, mapper: (layer: Layer)
   layers: document.layers.map(layer => (layer.id === id ? mapper(layer) : layer)),
 })
 
-export const updateLayer = (id: string, patch: Partial<Pick<Layer, 'area' | 'feather' | 'name' | 'rect' | 'visible' | 'rotation' | 'offsetX' | 'offsetY' | 'roundness' | 'featherAllEdges'>>, options: CommitOptions = {}) => {
+export const updateLayer = (id: string, patch: Partial<Pick<Layer, 'area' | 'feather' | 'featherAllEdges' | 'name' | 'offsetX' | 'offsetY' | 'rect' | 'rotation' | 'roundness' | 'visible'>>, options: CommitOptions = {}) => {
   const layer = getLayer(id)
   if (!layer) {
     return
@@ -107,15 +119,37 @@ export const updateLayer = (id: string, patch: Partial<Pick<Layer, 'area' | 'fea
     // Generated layers are pinned to the frame they were generated in.
     return
   }
-  if (patch.rect && (!Object.values(patch.rect).every(Number.isFinite) || patch.rect.width <= 0 || patch.rect.height <= 0)) return
-  for (const key of ['area', 'feather', 'roundness'] as const) if (patch[key] !== undefined) {if (!Number.isFinite(patch[key])) return; patch[key] = Math.min(1, Math.max(0, patch[key]!))}
-  for (const key of ['offsetX', 'offsetY'] as const) if (patch[key] !== undefined) {if (!Number.isFinite(patch[key])) return; patch[key] = Math.min(1, Math.max(-1, patch[key]!))}
-  if (patch.rotation !== undefined) {if (!Number.isFinite(patch.rotation)) return; patch.rotation = ((patch.rotation + 180) % 360 + 360) % 360 - 180}
-  projectStore.commit(document => mapLayers(document, id, current => ({...current, ...patch})), options)
+  if (patch.rect && (!Object.values(patch.rect).every(Number.isFinite) || patch.rect.width <= 0 || patch.rect.height <= 0)) {
+    return
+  }
+  for (const key of ['area', 'feather', 'roundness'] as const) {
+    if (!(patch[key] !== undefined)) {
+      continue
+    }
+    if (!Number.isFinite(patch[key])) {
+ return} patch[key] = Math.min(1, Math.max(0, patch[key]))
+  }
+  for (const key of ['offsetX', 'offsetY'] as const) {
+    if (!(patch[key] !== undefined)) {
+      continue
+    }
+    if (!Number.isFinite(patch[key])) {
+ return} patch[key] = Math.min(1, Math.max(-1, patch[key]))
+  }
+  if (patch.rotation !== undefined) {
+    if (!Number.isFinite(patch.rotation)) {return } patch.rotation = ((patch.rotation + 180) % 360 + 360) % 360 - 180
+  }
+  projectStore.commit(document => mapLayers(document, id, current => ({
+    ...current,
+    ...patch,
+  })), options)
 }
 
 export const removeLayer = (id: string) => {
-  projectStore.commit(document => ({...document, layers: document.layers.filter(layer => layer.id !== id)}))
+  projectStore.commit(document => ({
+    ...document,
+    layers: document.layers.filter(layer => layer.id !== id),
+  }))
   if (editorStore.state.selectedLayerId === id) {
     selectLayer(null)
   }
@@ -125,18 +159,24 @@ export const moveLayerInStack = (id: string, direction: -1 | 1) => {
   projectStore.commit(document => {
     const index = document.layers.findIndex(layer => layer.id === id)
     const target = index + direction
-    if (index < 0 || target < 0 || target >= document.layers.length) {
+    if (index === -1 || target < 0 || target >= document.layers.length) {
       return document
     }
     const layers = [...document.layers]
     const [layer] = layers.splice(index, 1)
     layers.splice(target, 0, layer)
-    return {...document, layers}
+    return {
+      ...document,
+      layers,
+    }
   })
 }
 
 export const addLayer = (layer: Layer) => {
-  projectStore.commit(document => ({...document, layers: [...document.layers, layer]}))
+  projectStore.commit(document => ({
+    ...document,
+    layers: [...document.layers, layer],
+  }))
 }
 
 const importOffset = 32
@@ -156,19 +196,32 @@ export const importLayers = async (files: ReadonlyArray<File>, worldPoint?: Poin
   for (const file of images) {
     try {
       const {blob, decoded} = await normalizeImportedImage(file)
-      if (epoch !== workspaceEpoch) {decoded.bitmap.close(); return []}
+      if (epoch !== workspaceEpoch) {
+        decoded.bitmap.close(); return []
+      }
       const asset = await assets.add(blob, decoded)
       const isFirst = projectStore.state.layers.length === 0
       let rect: Rect
       if (isFirst) {
-        rect = {x: 0, y: 0, width: asset.width, height: asset.height}
+        rect = {
+          x: 0,
+          y: 0,
+          width: asset.width,
+          height: asset.height,
+        }
       } else {
         const {frame} = editorStore.state
-        const natural = {width: asset.width, height: asset.height}
+        const natural = {
+          width: asset.width,
+          height: asset.height,
+        }
         const fits = natural.width <= frame.width && natural.height <= frame.height
         const size = fits ? natural : containSize(frame, natural.width / natural.height)
         const center = worldPoint ?? rectCenter(frame)
-        rect = rectFromCenter({x: center.x + offset, y: center.y + offset}, size)
+        rect = rectFromCenter({
+          x: center.x + offset,
+          y: center.y + offset,
+        }, size)
         offset += importOffset
       }
       const layer: Layer = {
@@ -211,7 +264,9 @@ export const addIngredients = async (files: ReadonlyArray<File>) => {
   for (const file of images) {
     try {
       const {blob, decoded} = await normalizeImportedImage(file)
-      if (epoch !== workspaceEpoch) {decoded.bitmap.close(); return []}
+      if (epoch !== workspaceEpoch) {
+        decoded.bitmap.close(); return []
+      }
       const asset = await assets.add(blob, decoded)
       const ingredient: Ingredient = {
         id: createId(),
@@ -221,8 +276,14 @@ export const addIngredients = async (files: ReadonlyArray<File>) => {
         thumbnail: await createThumbnailDataUrl(asset.bitmap),
         createdAt: Date.now(),
       }
-      if (epoch !== workspaceEpoch) return []
-      projectStore.commit(document => ({...document, nextIngredientIndex: ingredientSequence, ingredients: [...document.ingredients, ingredient]}))
+      if (epoch !== workspaceEpoch) {
+        return []
+      }
+      projectStore.commit(document => ({
+        ...document,
+        nextIngredientIndex: ingredientSequence,
+        ingredients: [...document.ingredients, ingredient],
+      }))
       added.push(ingredient)
     } catch (error) {
       notify('error', `Could not add ${file.name || 'image'}: ${getErrorMessage(error)}`)
@@ -232,7 +293,10 @@ export const addIngredients = async (files: ReadonlyArray<File>) => {
 }
 
 export const removeIngredient = (id: string) => {
-  projectStore.commit(document => ({...document, ingredients: document.ingredients.filter(ingredient => ingredient.id !== id)}))
+  projectStore.commit(document => ({
+    ...document,
+    ingredients: document.ingredients.filter(ingredient => ingredient.id !== id),
+  }))
 }
 
 // history and project
@@ -242,7 +306,9 @@ export const undo = () => projectStore.undo()
 export const redo = () => projectStore.redo()
 
 export let workspaceEpoch = 0
-export const advanceWorkspaceEpoch = () => {workspaceEpoch++}
+export const advanceWorkspaceEpoch = () => {
+  workspaceEpoch++
+}
 export const resetProject = () => {
   advanceWorkspaceEpoch()
   ingredientSequence = 1
@@ -259,7 +325,10 @@ export const resetProject = () => {
     resolution: state.resolution,
     quality: state.quality,
     ratio: state.ratio,
-    frame: rectFromCenter({x: 512, y: 512}, sizeFromArea(1024 * 1024, parseRatio(state.ratio))),
+    frame: rectFromCenter({
+      x: 512,
+      y: 512,
+    }, sizeFromArea(1024 * 1024, parseRatio(state.ratio))),
     sessionCost: state.sessionCost,
   }))
   fitViewToFrame()
