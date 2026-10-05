@@ -1,0 +1,83 @@
+.trigger
+  display: inline-flex
+  align-items: center
+  gap: 7px
+  height: 30px
+  padding: 0 10px 0 8px
+  border: 0
+  border-radius: 8px
+  font: inherit
+  font-size: 12px
+  font-variant-numeric: tabular-nums
+  color: inherit
+  background: transparent
+  cursor: pointer
+  &:hover
+    background: rgb(255 255 255 / 9%)
+    @include light
+      background: rgb(0 0 0 / 6%)
+
+.shapeBox
+  display: inline-grid
+  place-items: center
+  flex-shrink: 0
+
+.shape
+  box-sizing: border-box
+  border: 1.5px solid currentColor
+  border-radius: 2px
+
+.popover
+  position: fixed
+  inset: auto
+  bottom: anchor(top)
+  left: anchor(left)
+  position-try-fallbacks: flip-block, flip-inline
+  margin: 0 0 10px
+  padding: 8px
+  border: 1px solid rgb(255 255 255 / 10%)
+  border-radius: 12px
+  color: white
+  background: rgb(18 18 18 / 94%)
+  backdrop-filter: blur(16px)
+  box-shadow: 0 12px 40px rgb(0 0 0 / 50%)
+  @include light
+    color: black
+    background: rgb(255 255 255 / 95%)
+    border-color: rgb(0 0 0 / 10%)
+    box-shadow: 0 12px 40px rgb(0 0 0 / 14%)
+
+.grid
+  display: grid
+  grid-template-columns: repeat(4, 64px)
+  gap: 4px
+
+.option
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: 5px
+  padding: 8px 4px 6px
+  border: 0
+  border-radius: 8px
+  font: inherit
+  font-size: 11px
+  font-variant-numeric: tabular-nums
+  color: rgb(255 255 255 / 70%)
+  background: transparent
+  cursor: pointer
+  @include light
+    color: rgb(0 0 0 / 65%)
+  &:hover
+    color: white
+    background: rgb(255 255 255 / 8%)
+    @include light
+      color: black
+      background: rgb(0 0 0 / 5%)
+
+.selected
+  color: oklch(88% 0.16 85)
+  background: oklch(88% 0.16 85 / 12%)
+  @include light
+    color: oklch(50% 0.14 65)
+    background: oklch(70% 0.14 70 / 14%)

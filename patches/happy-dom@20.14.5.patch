@@ -1,0 +1,20 @@
+diff --git a/lib/html-parser/HTMLParser.js b/lib/html-parser/HTMLParser.js
+--- a/lib/html-parser/HTMLParser.js
++++ b/lib/html-parser/HTMLParser.js
+@@ -625,5 +625,5 @@
+     parseRawTextElementContent(tagName, text) {
+         const upperTagName = StringUtility.asciiUpperCase(tagName);
+-        if (upperTagName !== this.currentNode[PropertySymbol.tagName]) {
++        if (upperTagName !== StringUtility.asciiUpperCase(this.currentNode[PropertySymbol.tagName])) {
+             return;
+         }
+diff --git a/src/html-parser/HTMLParser.ts b/src/html-parser/HTMLParser.ts
+--- a/src/html-parser/HTMLParser.ts
++++ b/src/html-parser/HTMLParser.ts
+@@ -781,5 +781,5 @@
+ 		const upperTagName = StringUtility.asciiUpperCase(tagName);
+
+-		if (upperTagName !== (<Element>this.currentNode)[PropertySymbol.tagName]) {
++		if (upperTagName !== StringUtility.asciiUpperCase((<Element>this.currentNode)[PropertySymbol.tagName])) {
+ 			return;
+ 		}

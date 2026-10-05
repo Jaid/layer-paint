@@ -1,0 +1,72 @@
+diff --git a/assets/css.worker-ZGAWMrD5.js b/assets/css.worker-ZGAWMrD5.js
+index 9390b0cebd7ef2045276732f85700425aa832a02..4aedc4240feb6f152cc77590c2b797a3e8e4a14b 100644
+--- a/assets/css.worker-ZGAWMrD5.js
++++ b/assets/css.worker-ZGAWMrD5.js
+@@ -1,6 +1,6 @@
+ //#region node_modules/monaco-editor/esm/vs/languages/features/css/css.worker.js?worker
+ function e(e) {
+-	return new Worker(new URL("css.worker-BIsSvM_Q.js", import.meta.url).href, { name: e?.name });
++	return new Worker(new URL("css.worker-BIsSvM_Q.js", import.meta.url).href, { name: e?.name, type: "module" });
+ }
+ //#endregion
+ export { e as default };
+diff --git a/assets/editorWebWorkerMain-5pwK50BL.js b/assets/editorWebWorkerMain-5pwK50BL.js
+index 1dcdb4f63d01da4314e7f5b4fd2fff51e5813d44..f7fb2a96a3d60ab0d330cc8b5be3415db4e45f50 100644
+--- a/assets/editorWebWorkerMain-5pwK50BL.js
++++ b/assets/editorWebWorkerMain-5pwK50BL.js
+@@ -1,6 +1,6 @@
+ //#region node_modules/monaco-editor/esm/vs/editor/common/services/editorWebWorkerMain.js?worker
+ function e(e) {
+-	return new Worker(new URL("editorWebWorkerMain-BioN9fGU.js", import.meta.url).href, { name: e?.name });
++	return new Worker(new URL("editorWebWorkerMain-BioN9fGU.js", import.meta.url).href, { name: e?.name, type: "module" });
+ }
+ //#endregion
+ export { e as default };
+diff --git a/assets/html.worker-CjDeE2MB.js b/assets/html.worker-CjDeE2MB.js
+index f006b416eb379f314579904f67c9f3af79e5f479..9cc4ee2299de9e61a66a214b48754c4e61df2fc9 100644
+--- a/assets/html.worker-CjDeE2MB.js
++++ b/assets/html.worker-CjDeE2MB.js
+@@ -1,6 +1,6 @@
+ //#region node_modules/monaco-editor/esm/vs/languages/features/html/html.worker.js?worker
+ function e(e) {
+-	return new Worker(new URL("html.worker-CEvqvEpu.js", import.meta.url).href, { name: e?.name });
++	return new Worker(new URL("html.worker-CEvqvEpu.js", import.meta.url).href, { name: e?.name, type: "module" });
+ }
+ //#endregion
+ export { e as default };
+diff --git a/assets/json.worker-C4u3dDHp.js b/assets/json.worker-C4u3dDHp.js
+index 88528e9ece3a543dfafccd7f5e30e6272626a778..e3448c840192448ecc580b7f8973b7b6d81cd7b5 100644
+--- a/assets/json.worker-C4u3dDHp.js
++++ b/assets/json.worker-C4u3dDHp.js
+@@ -1,6 +1,6 @@
+ //#region node_modules/monaco-editor/esm/vs/languages/features/json/json.worker.js?worker
+ function e(e) {
+-	return new Worker(new URL("json.worker-CAiVr-gV.js", import.meta.url).href, { name: e?.name });
++	return new Worker(new URL("json.worker-CAiVr-gV.js", import.meta.url).href, { name: e?.name, type: "module" });
+ }
+ //#endregion
+ export { e as default };
+diff --git a/assets/ts.worker-BydNuElr.js b/assets/ts.worker-BydNuElr.js
+index 2e353d1a6af2a1a53e9f02ceb03d055a11d0860d..b439a76815ed1fc4b1478a63e3e6ade6971cb411 100644
+--- a/assets/ts.worker-BydNuElr.js
++++ b/assets/ts.worker-BydNuElr.js
+@@ -1,6 +1,6 @@
+ //#region node_modules/monaco-editor/esm/vs/languages/features/typescript/ts.worker.js?worker
+ function e(e) {
+-	return new Worker(new URL("ts.worker-DZhhT1EO.js", import.meta.url).href, { name: e?.name });
++	return new Worker(new URL("ts.worker-DZhhT1EO.js", import.meta.url).href, { name: e?.name, type: "module" });
+ }
+ //#endregion
+ export { e as default };
+diff --git a/assets/yaml.worker-Y0uWi-gi.js b/assets/yaml.worker-Y0uWi-gi.js
+index 80f9ded8c855f7128bc475151456926e1b42c8e7..d94c3dceab45b3fcfc767403cfeff26a504de09f 100644
+--- a/assets/yaml.worker-Y0uWi-gi.js
++++ b/assets/yaml.worker-Y0uWi-gi.js
+@@ -1,6 +1,6 @@
+ //#region src/runtime/yaml.worker.ts?worker
+ function e(e) {
+-	return new Worker(new URL("yaml.worker-DzOKX3TP.js", import.meta.url).href, { name: e?.name });
++	return new Worker(new URL("yaml.worker-DzOKX3TP.js", import.meta.url).href, { name: e?.name, type: "module" });
+ }
+ //#endregion
+ export { e as default };

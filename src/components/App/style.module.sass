@@ -1,0 +1,62 @@
+:has(>.container)
+  height: 100dvh
+  width: 100%
+  overflow: hidden
+
+.container, .group
+  height: 100%
+  width: 100%
+  font-size: 13px
+
+.pane
+  position: relative
+  min-width: 0
+  min-height: 0
+  overflow: hidden
+
+.canvasPane
+  display: flex
+  height: 100%
+  min-width: 0
+
+.stage
+  position: relative
+  flex: 1
+  min-width: 0
+  height: 100%
+  overflow: hidden
+
+.separator
+  position: relative
+  width: 1px
+  background: rgb(255 255 255 / 12%)
+  outline: none
+  &[aria-orientation=horizontal]
+    width: auto
+    height: 1px
+  &::after
+    content: ''
+    position: absolute
+    inset: -4px
+    z-index: 3
+  &:hover, &:focus-visible
+    background: #e9cf91
+  @include light
+    background: rgb(0 0 0 / 15%)
+
+@media (max-width: 1000px)
+  .canvasPane
+    flex-direction: column
+  .stage
+    height: auto
+    min-height: 160px
+
+.loading
+  position: absolute
+  inset: 0
+  z-index: 90
+  display: grid
+  place-items: center
+  background: var(--panel)
+  color: var(--muted)
+  backdrop-filter: blur(12px)

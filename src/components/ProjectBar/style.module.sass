@@ -1,0 +1,47 @@
+.bar
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  gap: 5px
+  padding: 8px 12px
+  border-bottom: 1px solid var(--border)
+  button, select
+    padding: 5px 8px
+    min-height: 29px
+    border: 1px solid var(--border)
+    border-radius: 6px
+    background: var(--surface)
+    color: inherit
+    font-size: 11px
+  select
+    margin-left: auto
+    max-width: 84px
+
+.dialog
+  max-width: min(480px, calc(100vw - 28px))
+  padding: 22px
+  border: 1px solid var(--border)
+  border-radius: 14px
+  background: var(--panel)
+  color: var(--text)
+  box-shadow: 0 20px 100px #0008
+  h2
+    margin: 0 0 12px
+    font-size: 20px
+  p
+    line-height: 1.65
+    color: var(--muted)
+  button
+    margin: 5px 4px 0 0
+  &::backdrop
+    background: #0008
+    backdrop-filter: blur(6px)
+
+@media (max-width: 1000px) and (max-height: 700px)
+  .bar
+    padding: 4px 8px
+    gap: 4px
+    button, select
+      min-height: 26px
+      padding: 4px 6px
+      font-size: 10px

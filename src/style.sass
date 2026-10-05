@@ -1,0 +1,69 @@
+@use 'antimono/css/antimono-static.css'
+
+:root
+  color-scheme: dark
+  --text: #ececeb
+  --muted: #a3a2a9
+  --border: #ffffff1b
+  --surface: #ffffff09
+  --panel: #0b0c0fee
+  background: #050506
+  color: var(--text)
+  font-family: Geologica, Inter, system-ui, sans-serif, 'Twitter Color Emoji'
+  font-synthesis: none
+
+:root[data-light]
+  color-scheme: light
+  --text: #28252c
+  --muted: #69646e
+  --border: #00000024
+  --surface: #00000005
+  --panel: #fffffff2
+  background: #f6f5f2
+
+*, *::before, *::after
+  box-sizing: border-box
+
+body
+  margin: 0
+
+button, select, input, textarea
+  font-family: inherit
+
+button, select, summary
+  cursor: pointer
+
+button:disabled, select:disabled
+  cursor: default
+  opacity: 40%
+
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible
+  outline: 2px solid #bd9854
+  outline-offset: 2px
+
+button, a, summary
+  -webkit-tap-highlight-color: transparent
+
+code, kbd
+  font-family: Antimono, ui-monospace, monospace
+
+input[type=checkbox]
+  accent-color: #cab17b
+
+a
+  color: inherit
+
+pre
+  white-space: pre-wrap
+
+::-webkit-scrollbar
+  width: 7px
+  height: 7px
+
+::-webkit-scrollbar-thumb
+  background: #8885
+  border-radius: 5px
+
+@media (prefers-reduced-motion: reduce)
+  *, *::before, *::after
+    scroll-behavior: auto !important

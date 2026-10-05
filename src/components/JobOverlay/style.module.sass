@@ -1,0 +1,91 @@
+.overlay
+  position: absolute
+  top: 0
+  left: 0
+  overflow: hidden
+  display: grid
+  place-items: center
+  pointer-events: none
+  border-radius: 2px
+  background: rgb(0 0 0 / 30%)
+  @include light
+    background: rgb(255 255 255 / 35%)
+
+.failed
+  background: oklch(40% 0.15 25 / 30%)
+  outline: 1px solid oklch(65% 0.2 25 / 70%)
+
+.shimmer
+  position: absolute
+  inset: -50%
+  background: conic-gradient(from 0deg, transparent 0 70%, oklch(86% 0.17 85 / 22%) 85%, transparent 100%)
+  animation: spin 2.4s linear infinite
+  filter: blur(24px)
+  @include static
+    animation: none
+
+.panel
+  position: relative
+  display: flex
+  align-items: center
+  gap: 8px
+  max-width: calc(100% - 16px)
+  padding: 6px 6px 6px 10px
+  border-radius: 999px
+  font-size: 12px
+  font-variant-numeric: tabular-nums
+  pointer-events: auto
+  color: white
+  background: rgb(0 0 0 / 72%)
+  backdrop-filter: blur(12px)
+  box-shadow: 0 4px 24px rgb(0 0 0 / 40%)
+  @include light
+    color: black
+    background: rgb(255 255 255 / 82%)
+    box-shadow: 0 4px 24px rgb(0 0 0 / 12%)
+
+.text
+  white-space: nowrap
+  overflow: hidden
+  text-overflow: ellipsis
+
+.error
+  max-width: 320px
+  overflow: hidden
+  text-overflow: ellipsis
+  white-space: nowrap
+  color: oklch(78% 0.15 25)
+  @include light
+    color: oklch(50% 0.18 25)
+
+.spinner
+  flex-shrink: 0
+  width: 12px
+  height: 12px
+  border-radius: 50%
+  border: 2px solid oklch(86% 0.17 85 / 25%)
+  border-top-color: oklch(86% 0.17 85)
+  animation: spin 800ms linear infinite
+
+.button
+  display: grid
+  place-items: center
+  flex-shrink: 0
+  width: 22px
+  height: 22px
+  padding: 0
+  border: 0
+  border-radius: 50%
+  color: inherit
+  background: rgb(255 255 255 / 10%)
+  cursor: pointer
+  @include light
+    background: rgb(0 0 0 / 7%)
+  &:hover
+    background: rgb(255 255 255 / 22%)
+    @include light
+      background: rgb(0 0 0 / 14%)
+
+@keyframes spin
+  to
+    rotate: 360deg

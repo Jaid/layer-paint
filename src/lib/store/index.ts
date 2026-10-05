@@ -1,0 +1,5 @@
+export type {CommitOptions, HistoryMeta} from './HistoryStore.ts'
+export {HistoryStore} from './HistoryStore.ts'
+export type {Updater} from './Store.ts'
+export {Store} from './Store.ts'
+export {useStore} from './useStore.ts'

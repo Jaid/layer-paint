@@ -1,0 +1,254 @@
+.viewport
+  position: relative
+  width: 100%
+  height: 100%
+  min-height: 160px
+  overflow: hidden
+  outline: none
+  touch-action: none
+  user-select: none
+  background-color: #060708
+  background-image: radial-gradient(circle, rgb(255 255 255 / 12%) 1px, transparent 1px)
+  @include light
+    background-color: #f0f0ed
+    background-image: radial-gradient(circle, rgb(0 0 0 / 17%) 1px, transparent 1px)
+
+.scene
+  position: absolute
+  inset: 0
+  width: 100%
+  height: 100%
+  pointer-events: none
+
+.selection
+  position: absolute
+  box-sizing: border-box
+  pointer-events: none
+  outline: 1px solid #f59aba
+  transform-origin: center
+
+.generatedSelection
+  outline-color: #8adeb4
+
+.maskOutline, .featherOutline
+  position: absolute
+  box-sizing: border-box
+  pointer-events: none
+  outline: 1px dashed #fbb665
+
+.featherOutline
+  outline-style: dotted
+  outline-color: #fff4c5
+
+.frame
+  position: absolute
+  box-sizing: border-box
+  pointer-events: none
+  border: 1.5px solid #ead18b
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 16%), 0 0 22px rgb(236 205 130 / 9%)
+  transition: box-shadow 180ms, border-color 180ms
+  @include light
+    border-color: #99641a
+    box-shadow: 0 0 0 100vmax rgb(255 255 255 / 14%)
+
+.frameLabel
+  position: absolute
+  left: 12px
+  bottom: calc(100% + 7px)
+  display: flex
+  gap: 10px
+  padding: 3px 7px
+  border-radius: 4px
+  color: #e9d398
+  background: rgb(10 11 13 / 85%)
+  font-size: 10px
+  font-variant-numeric: tabular-nums
+  white-space: nowrap
+  span + span
+    opacity: 70%
+  @include light
+    background: rgb(255 255 255 / 90%)
+    color: #75460e
+
+.emptyHint
+  position: absolute
+  inset: 0
+  display: flex
+  flex-direction: column
+  justify-content: center
+  gap: 9px
+  padding: 12%
+  text-align: center
+  text-wrap: balance
+  color: #a1a3ad
+  container: empty-frame / size
+  strong
+    font-size: 17px
+    font-weight: 350
+    color: #e4e3df
+  span
+    font-size: 12px
+    line-height: 1.6
+  @include light
+    color: #66636c
+    strong
+      color: #353138
+  @container empty-frame (width < 180px) or (height < 140px)
+    span
+      display: none
+  @container empty-frame (width < 110px) or (height < 70px)
+    strong
+      display: none
+
+.handle, .edgeHandle, .imageHandle, .rotationHandle
+  position: absolute
+  box-sizing: border-box
+  background: #ead18b
+  border: 2px solid #131313
+  pointer-events: auto
+  touch-action: none
+
+.handle
+  width: 13px
+  height: 13px
+  border-radius: 50%
+  margin: -7px
+
+.handle, .edgeHandle
+  opacity: 0
+  pointer-events: none
+  transition: opacity 120ms
+
+.handlesVisible
+  .handle, .edgeHandle
+    opacity: 1
+    pointer-events: auto
+
+.imageHandle
+  width: 12px
+  height: 12px
+  margin: -6px
+  border-radius: 3px
+  background: #f59aba
+
+.rotationHandle
+  width: 14px
+  height: 14px
+  top: -32px
+  left: calc(50% - 7px)
+  border-radius: 50%
+  background: #f59aba
+  cursor: grab
+  &::after
+    content: ''
+    position: absolute
+    top: 12px
+    left: 4px
+    width: 1px
+    height: 16px
+    background: #f59aba
+
+.nw
+  top: 0
+  left: 0
+  cursor: nwse-resize
+
+.ne
+  top: 0
+  right: 0
+  cursor: nesw-resize
+
+.se
+  bottom: 0
+  right: 0
+  cursor: nwse-resize
+
+.sw
+  bottom: 0
+  left: 0
+  cursor: nesw-resize
+
+.edgeHandle
+  border-radius: 6px
+
+.n, .s
+  width: 30px
+  height: 9px
+  left: calc(50% - 15px)
+  cursor: ns-resize
+
+.n
+  top: -5px
+
+.s
+  bottom: -5px
+
+.e, .w
+  width: 9px
+  height: 30px
+  top: calc(50% - 15px)
+  cursor: ew-resize
+
+.e
+  right: -5px
+
+.w
+  left: -5px
+
+.guideX, .guideY
+  position: absolute
+  pointer-events: none
+  background: #e785c0
+
+.guideX
+  width: 1px
+  top: 0
+  bottom: 0
+
+.guideY
+  height: 1px
+  left: 0
+  right: 0
+
+.modeHint
+  position: absolute
+  bottom: 14px
+  left: 50%
+  transform: translateX(-50%)
+  max-width: calc(100% - 24px)
+  padding: 6px 10px
+  border: 1px solid rgb(255 255 255 / 12%)
+  border-radius: 8px
+  color: #ead9b7
+  background: rgb(14 12 10 / 85%)
+  font-size: 11px
+  text-align: center
+  pointer-events: none
+
+.activeFrame
+  border-color: #fff4d0
+
+.charged
+  border-color: #fff0b7
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 24%), 0 0 42px rgb(242 207 126 / 38%), inset 0 0 35px rgb(245 220 158 / 16%)
+  &::after
+    content: ''
+    position: absolute
+    inset: 0
+    background: radial-gradient(ellipse at 25% 30%, rgb(220 181 115 / 20%), transparent 60%), radial-gradient(ellipse at 75% 70%, rgb(165 181 229 / 16%), transparent 55%)
+    animation: breathe 2.4s ease-in-out infinite alternate
+    pointer-events: none
+
+@keyframes breathe
+  from
+    opacity: 0.4
+    filter: hue-rotate(-12deg)
+  to
+    opacity: 1
+    filter: hue-rotate(14deg)
+
+@media (prefers-reduced-motion: reduce)
+  .charged::after
+    animation: none
+  .frame, .handle, .edgeHandle
+    transition: none

@@ -1,0 +1,42 @@
+.overlay
+  position: absolute
+  inset: 8px
+  z-index: 20
+  display: grid
+  place-items: center
+  pointer-events: none
+  border: 2px dashed rgb(255 255 255 / 18%)
+  border-radius: 16px
+  background: rgb(0 0 0 / 45%)
+  transition: background 120ms, border-color 120ms
+  @include light
+    border-color: rgb(0 0 0 / 18%)
+    background: rgb(255 255 255 / 55%)
+
+.hovered
+  border-color: oklch(86% 0.17 85)
+  background: oklch(30% 0.06 85 / 55%)
+  @include light
+    border-color: oklch(62% 0.16 65)
+    background: oklch(95% 0.05 85 / 70%)
+
+.card
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: 6px
+  padding: 20px 28px
+  border-radius: 14px
+  text-align: center
+  color: white
+  background: rgb(0 0 0 / 60%)
+  backdrop-filter: blur(10px)
+  @include light
+    color: black
+    background: rgb(255 255 255 / 80%)
+  strong
+    font-size: 16px
+    font-weight: 400
+  span
+    font-size: 12px
+    opacity: 65%

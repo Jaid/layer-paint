@@ -13,7 +13,8 @@
 /private/
 
 # dotenv
-.env
+.env*
+!.env.example
 
 
 # Bun

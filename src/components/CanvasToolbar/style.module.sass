@@ -1,0 +1,55 @@
+.dialog
+  width: min(440px, calc(100vw - 28px))
+  max-height: calc(100dvh - 32px)
+  overflow: auto
+  padding: 22px
+  border: 1px solid var(--border)
+  border-radius: 14px
+  color: var(--text)
+  background: var(--panel)
+  box-shadow: 0 20px 100px #0008
+  header
+    display: flex
+    align-items: center
+    justify-content: space-between
+  h2
+    margin: 0
+    font-size: 20px
+  p
+    color: var(--muted)
+    line-height: 1.6
+  label
+    display: flex
+    flex-direction: column
+    gap: 7px
+    margin: 14px 0
+    font-size: 12px
+  select, input, button
+    background: var(--surface)
+    color: inherit
+    border: 1px solid var(--border)
+    border-radius: 7px
+    padding: 8px 10px
+    font: inherit
+  &::backdrop
+    background: #0009
+    backdrop-filter: blur(6px)
+
+.dimensions
+  display: block
+  margin: 20px 0
+  font-size: 19px
+  font-variant-numeric: tabular-nums
+
+.warning
+  padding: 0 10px
+  border-left: 2px solid #e8b970
+  label
+    flex-direction: row
+    align-items: center
+
+.formats
+  display: flex
+  gap: 8px
+  margin: 12px 0
+  flex-wrap: wrap

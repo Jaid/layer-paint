@@ -1,0 +1,268 @@
+$border: #1c1c1c
+$borderLight: #e4e4e4
+
+.panel
+  position: relative
+  display: flex
+  flex-direction: column
+  height: 100%
+  min-width: 0
+  background: var(--panel)
+  backdrop-filter: blur(28px) saturate(0.85)
+
+.header
+  display: flex
+  align-items: center
+  gap: 10px
+  padding: 8px 10px 8px 14px
+  border-bottom: 1px solid $border
+  @include light
+    border-bottom-color: $borderLight
+
+.title
+  display: flex
+  align-items: center
+  gap: 8px
+  margin: 0
+  font-size: 15px
+  font-weight: 300
+  letter-spacing: 0.02em
+
+.logo
+  width: 16px
+  height: 16px
+  border-radius: 4px
+  background: linear-gradient(135deg, oklch(86% 0.17 85), oklch(70% 0.2 30) 55%, oklch(65% 0.2 300))
+  box-shadow: 4px 4px 0 -1px oklch(85% 0.15 200 / 60%)
+
+.saveState
+  margin-left: auto
+  font-size: 11px
+  color: rgb(255 255 255 / 55%)
+  transition: color 200ms
+  @include light
+    color: rgb(0 0 0 / 55%)
+  @include narrow
+    display: none
+
+.saving
+  color: rgb(255 255 255 / 55%)
+  @include light
+    color: rgb(0 0 0 / 60%)
+
+.footer
+  display: flex
+  flex-direction: column
+  gap: 10px
+  padding: 10px 12px 12px
+  border-top: 1px solid $border
+  @include light
+    border-top-color: $borderLight
+
+.settings
+  display: flex
+  flex-wrap: wrap
+  gap: 8px
+
+.field
+  display: flex
+  flex-direction: column
+  gap: 3px
+  min-width: 0
+
+.modelField
+  flex: 1 1 180px
+
+.fieldLabel
+  font-size: 10px
+  text-transform: uppercase
+  letter-spacing: 0.06em
+  color: rgb(255 255 255 / 55%)
+  @include light
+    color: rgb(0 0 0 / 58%)
+
+.select
+  height: 32px
+  min-width: 72px
+  padding: 0 8px
+  border: 1px solid rgb(255 255 255 / 12%)
+  border-radius: 8px
+  font: inherit
+  font-size: 13px
+  color: inherit
+  background: #0d0d0d
+  cursor: pointer
+  @include light
+    border-color: rgb(0 0 0 / 14%)
+    background: #fafafa
+  &:disabled
+    cursor: default
+    opacity: 60%
+  &:focus-visible
+    outline: 2px solid oklch(86% 0.17 85 / 60%)
+    outline-offset: 1px
+
+.generateRow
+  display: flex
+  align-items: center
+  gap: 10px
+
+.meta
+  display: flex
+  align-items: center
+  gap: 12px
+  margin-right: auto
+  font-size: 11px
+  font-variant-numeric: tabular-nums
+  color: rgb(255 255 255 / 45%)
+  @include light
+    color: rgb(0 0 0 / 50%)
+
+.shortcut
+  @include narrow
+    display: none
+  kbd
+    padding: 1px 5px
+    border: 1px solid rgb(255 255 255 / 15%)
+    border-radius: 4px
+    font: inherit
+    font-size: 10px
+    @include light
+      border-color: rgb(0 0 0 / 15%)
+
+.generate
+  position: relative
+  display: inline-flex
+  align-items: center
+  gap: 8px
+  height: 38px
+  padding: 0 20px 0 16px
+  border: 0
+  border-radius: 10px
+  font: inherit
+  font-size: 14px
+  font-weight: 500
+  color: black
+  background: linear-gradient(135deg, oklch(90% 0.16 90), oklch(80% 0.17 70))
+  box-shadow: 0 0 24px oklch(86% 0.17 85 / 25%)
+  cursor: pointer
+  transition: filter 100ms, box-shadow 200ms
+  @include light
+    color: white
+    background: linear-gradient(135deg, oklch(62% 0.16 65), oklch(55% 0.17 45))
+    box-shadow: 0 4px 16px oklch(62% 0.16 65 / 30%)
+  &:hover
+    filter: brightness(1.08)
+    box-shadow: 0 0 32px oklch(86% 0.17 85 / 40%)
+  &:active
+    filter: brightness(0.95)
+
+.badge
+  position: absolute
+  top: -6px
+  right: -6px
+  min-width: 18px
+  height: 18px
+  padding: 0 5px
+  border-radius: 999px
+  box-sizing: border-box
+  font-size: 11px
+  line-height: 18px
+  text-align: center
+  color: white
+  background: oklch(60% 0.2 30)
+
+.title small
+  color: var(--muted)
+  font-size: 9px
+  letter-spacing: 0.12em
+  text-transform: uppercase
+  margin-left: 3px
+
+.optionsRow
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: 8px
+  font-size: 10px
+
+.demo
+  display: flex
+  align-items: center
+  gap: 5px
+  color: var(--text)
+  span
+    color: var(--muted)
+    font-size: 9px
+
+.advanced
+  position: relative
+  color: var(--muted)
+  summary
+    cursor: pointer
+  >div
+    position: absolute
+    bottom: 22px
+    right: 0
+    z-index: 20
+    width: 260px
+    max-width: 70vw
+    padding: 12px
+    border: 1px solid var(--border)
+    border-radius: 9px
+    background: var(--panel)
+    box-shadow: 0 10px 36px #0006
+    line-height: 1.6
+    label
+      color: var(--text)
+
+.saveError
+  color: #e6a469
+
+@media (max-width: 1000px)
+  .header
+    padding-block: 7px
+  .footer
+    padding: 8px 10px
+    gap: 6px
+  .settings
+    gap: 5px
+  .fieldLabel
+    font-size: 9px
+  .modelField
+    flex-basis: 125px
+  .select
+    font-size: 11px
+    height: 29px
+    min-width: 52px
+  .generate
+    height: 32px
+    padding-inline: 12px
+    font-size: 12px
+  .meta
+    font-size: 9px
+  .shortcut
+    display: none
+
+@media (max-width: 1000px) and (max-height: 700px)
+  .header
+    padding-block: 5px
+  .title
+    font-size: 13px
+  .footer
+    gap: 5px
+    padding: 6px 8px
+  .settings
+    flex-wrap: nowrap
+  .fieldLabel
+    font-size: 8px
+  .modelField
+    flex-basis: 110px
+  .select
+    height: 26px
+    font-size: 10px
+  .generate
+    height: 29px
+  .meta
+    gap: 4px
+    font-size: 8px

@@ -1,0 +1,42 @@
+.container
+  position: relative
+  flex: 1
+  min-height: 0
+  overflow: hidden
+  container: prompt-editor / size
+  // Monaco’s placeholder is too faint and does not wrap.
+  :global(.monaco-editor .editorPlaceholder)
+    color: rgb(255 255 255 / 45%)
+    text-wrap: wrap
+    @include light
+      color: rgb(0 0 0 / 45%)
+
+%reference
+  border-radius: 4px
+  font-weight: bold
+  padding-inline: 1px
+
+.reference
+  @extend %reference
+  color: oklch(85% 0.15 200) !important
+  background: oklch(85% 0.15 200 / 14%)
+  @include light
+    color: oklch(48% 0.15 220) !important
+    background: oklch(60% 0.15 220 / 12%)
+
+.canvasReference
+  @extend %reference
+  color: oklch(88% 0.16 85) !important
+  background: oklch(88% 0.16 85 / 14%)
+  @include light
+    color: oklch(52% 0.14 70) !important
+    background: oklch(70% 0.14 70 / 16%)
+
+.missingReference
+  @extend %reference
+  color: oklch(70% 0.2 25) !important
+  text-decoration: wavy underline
+  text-decoration-color: oklch(70% 0.2 25 / 60%)
+
+.container
+  min-height: 60px
