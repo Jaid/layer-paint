@@ -78,10 +78,14 @@ export async function openPortableProject(file: Blob | File) {
       })
     }
   } catch (error) {
-    for (const entry of staged) {entry.decoded.bitmap.close() } throw error
+    for (const entry of staged) {
+      entry.decoded.bitmap.close()
+    } throw error
   }
   if (!unchanged()) {
-    for (const entry of staged) {entry.decoded.bitmap.close() } throw new Error('The workspace changed while the project was opening. Your edits were preserved; open the file again when ready.')
+    for (const entry of staged) {
+      entry.decoded.bitmap.close()
+    } throw new Error('The workspace changed while the project was opening. Your edits were preserved; open the file again when ready.')
   }
   const remap = new Map(staged.map(entry => [entry.oldId, entry.id]))
   const newDocument: ProjectDocument = {

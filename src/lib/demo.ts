@@ -49,8 +49,9 @@ export async function createDemoImage(prompt: string, aspect = 1, source?: Offsc
     const abort = () => {
       clearTimeout(timer); reject(new DOMException('Canceled', 'AbortError'))
     }
-    if (signal?.aborted) { abort() 
-} else {
+    if (signal?.aborted) {
+      abort()
+    } else {
       signal?.addEventListener('abort', abort, {once: true})
     }
   })

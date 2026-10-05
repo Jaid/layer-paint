@@ -92,7 +92,8 @@ function LayerRow({layer, background, selected}: {
         {renaming ? <input
           className={css.nameInput} aria-label='Layer name' autoFocus defaultValue={layer.name} onBlur={event => finish(event.currentTarget.value)} onKeyDown={event => {
             if (event.key === 'Enter') {
- finish(event.currentTarget.value)} else if (event.key === 'Escape') {
+              finish(event.currentTarget.value)
+            } else if (event.key === 'Escape') {
               setRenaming(false)
             }
           }}

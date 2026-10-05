@@ -30,7 +30,8 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
   const ids = new Set<string>; const indexes = new Set<number>
   const uniqueId = (v: unknown) => {
     const id = text(v); if (ids.has(id)) {
- return fail()} ids.add(id); return id
+      return fail()
+    } ids.add(id); return id
   }
   const layers: Array<Layer> = value.layers.map(v => {
     if (!isRecord(v) || !['generated', 'import'].includes(String(v.kind))) {

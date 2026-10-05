@@ -54,7 +54,9 @@ export function findReferences(text: string): Array<ReferenceToken> {
   const tokens: Array<ReferenceToken> = []
   for (let index = 0; index < text.length; index++) {
     if (text.startsWith('<!--', index)) {
-      const end = text.indexOf('-->', index + 4); if (end === -1) {break } index = end + 2; continue
+      const end = text.indexOf('-->', index + 4); if (end === -1) {
+        break
+      } index = end + 2; continue
     }
     if (text[index] === '`' && !escaped(text, index)) {
       let count = 1
@@ -115,7 +117,9 @@ export function compilePrompt(options: CompilePromptOptions): CompiledPrompt {
       continue
     }
     if (!Number.isSafeInteger(index) || !available.has(index)) {
-      const message = `![${index}] does not exist. Add a reference image or remove this token.`; if (!errors.includes(message)) {errors.push(message) } continue
+      const message = `![${index}] does not exist. Add a reference image or remove this token.`; if (!errors.includes(message)) {
+        errors.push(message)
+      } continue
     }
     positions.set(index, sources.length)
     sources.push({

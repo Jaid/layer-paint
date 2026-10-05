@@ -127,17 +127,21 @@ export const updateLayer = (id: string, patch: Partial<Pick<Layer, 'area' | 'fea
       continue
     }
     if (!Number.isFinite(patch[key])) {
- return} patch[key] = Math.min(1, Math.max(0, patch[key]))
+      return
+    } patch[key] = Math.min(1, Math.max(0, patch[key]))
   }
   for (const key of ['offsetX', 'offsetY'] as const) {
     if (!(patch[key] !== undefined)) {
       continue
     }
     if (!Number.isFinite(patch[key])) {
- return} patch[key] = Math.min(1, Math.max(-1, patch[key]))
+      return
+    } patch[key] = Math.min(1, Math.max(-1, patch[key]))
   }
   if (patch.rotation !== undefined) {
-    if (!Number.isFinite(patch.rotation)) {return } patch.rotation = ((patch.rotation + 180) % 360 + 360) % 360 - 180
+    if (!Number.isFinite(patch.rotation)) {
+      return
+    } patch.rotation = ((patch.rotation + 180) % 360 + 360) % 360 - 180
   }
   projectStore.commit(document => mapLayers(document, id, current => ({
     ...current,
