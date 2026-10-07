@@ -94,10 +94,11 @@ describe('ratio', () => {
   })
 })
 describe('models', () => {
-  test('all eight requested models are available', () => {
+  test('all nine requested models are available', () => {
     expect(models.map(model => model.id)).toEqual([
       'google/gemini-3.1-flash-lite-image',
       'google/gemini-3.1-flash-image',
+      'google/gemini-nano-banana-2.1',
       'openai/gpt-image-2.5-sunburst',
       'black-forest-labs/flux-3-image',
       'x-ai/grok-imagine-image-2.0',

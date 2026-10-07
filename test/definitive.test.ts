@@ -204,7 +204,7 @@ describe('Image API request contract', () => {
       })).toThrow()
     }
   })
-  test('all eight models come from the dedicated catalog, not chat discovery', () => expect(parseImageCatalog(catalog).map(item => item.id)).toEqual(models.map(model => model.id)))
+  test('all nine models come from the dedicated catalog, not chat discovery', () => expect(parseImageCatalog(catalog).map(item => item.id)).toEqual(models.map(model => model.id)))
   test('a generic chat catalog cannot masquerade as image capabilities', () => expect(() => parseImageCatalog({data: [{
     id: models[0].id,
     architecture: {output_modalities: ['image']},

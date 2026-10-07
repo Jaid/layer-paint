@@ -45,7 +45,7 @@ describe('components', () => {
   test('PromptPanel lists all models', async () => {
     const {container} = await renderComponent('PromptPanel')
     const options = [...container.querySelectorAll('[data-testid="model-select"] option')].map(option => option.getAttribute('value'))
-    expect(options).toHaveLength(8)
+    expect(options).toHaveLength(9)
     expect(options).toContain('bytedance-seed/seedream-5-0-pro')
   })
   test('switching the model keeps the frame ratio supported', async () => {

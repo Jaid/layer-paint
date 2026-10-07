@@ -100,11 +100,12 @@ The app uses the dedicated OpenRouter Image API:
 - Discovery: `/api/v1/images/models`
 - Generation: `/api/v1/images`
 
-`reference/image-models.json` records the dated capability snapshot. The client and gateway refresh capabilities at runtime and keep the snapshot as an explicit offline fallback. All eight requested canonical model IDs are present in the catalog:
+`reference/image-models.json` records the dated capability snapshot. The client and gateway refresh capabilities at runtime and keep the snapshot as an explicit offline fallback. All nine requested canonical model IDs are present in the catalog:
 
 ```text
 google/gemini-3.1-flash-lite-image
 google/gemini-3.1-flash-image
+google/gemini-nano-banana-2.1
 openai/gpt-image-2.5-sunburst
 black-forest-labs/flux-3-image
 x-ai/grok-imagine-image-2.0

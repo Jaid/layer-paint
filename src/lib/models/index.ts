@@ -19,7 +19,7 @@ export type ImageCatalogEntry = {
   supported_parameters: Record<string, Capability>
 }
 export const requestedModelIds: ReadonlyArray<string> = snapshot.data.map(row => row.id)
-const titles = ['Gemini Flash Lite', 'Gemini Flash', 'GPT Image Sunburst', 'Flux 3', 'Grok Imagine', 'Seedream Flash', 'Seedream Lite', 'Seedream Pro']
+const titles = ['Gemini Flash Lite', 'Gemini Flash', 'Nano Banana 2.1', 'GPT Image Sunburst', 'Flux 3', 'Grok Imagine', 'Seedream Flash', 'Seedream Lite', 'Seedream Pro']
 const vendors: Record<string, string> = {
   google: 'Google',
   openai: 'OpenAI',
