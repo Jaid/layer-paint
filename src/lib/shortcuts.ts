@@ -77,7 +77,8 @@ const handleKeyDown = (event: KeyboardEvent) => {
         offsetX: (layer.offsetX ?? 0) + x / layer.rect.width,
         offsetY: (layer.offsetY ?? 0) + y / layer.rect.height,
       }, {coalesceKey: `mask-nudge:${layer.id}`})
-    } else {
+    } else if (projectStore.state.layers.length) {
+      // An empty canvas has nothing to frame, so the frame stays put.
       setFrame({
         ...state.frame,
         x: state.frame.x + x,

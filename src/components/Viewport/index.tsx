@@ -215,7 +215,8 @@ export default function Viewport() {
       begin(event, 'frame-edge', undefined, undefined, edge); return
     }
     const hit = findLayerAt(projectStore.state.layers, world)
-    if (state.tool !== 'frame' || event.ctrlKey || event.metaKey || event.altKey || !rectContains(state.frame, world)) {
+    // With no artwork there is nothing to frame, so a press inside the frame pans instead of moving it.
+    if (state.tool !== 'frame' || event.ctrlKey || event.metaKey || event.altKey || !projectStore.state.layers.length || !rectContains(state.frame, world)) {
       selectLayer(hit?.id ?? null)
       if (hit?.kind === 'import' && state.tool !== 'mask') {
         begin(event, 'image-move', hit); return

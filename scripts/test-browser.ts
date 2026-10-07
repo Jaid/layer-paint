@@ -80,6 +80,21 @@ try {
     assert.equal(layout.count, 1); assert.ok(layout.frameWidth > 100); assert.ok(Math.abs(layout.frameWidth - layout.frameHeight) < 1); assert.ok(layout.canvasRight <= layout.dockLeft + 1)
   })
 
+  await check('An empty canvas keeps the frame in place and pans instead', async () => {
+    await settle()
+    const before = await page.evaluate(() => ({frame: {...globalThis.layerPaint!.editorStore.state.frame}, view: {...globalThis.layerPaint!.editorStore.state.view}, layers: globalThis.layerPaint!.projectStore.state.layers.length}))
+    assert.equal(before.layers, 0)
+    const bounds = (await (await page.$('[data-testid="frame"]'))!.boundingBox())!
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+    await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width / 2 + 60, bounds.y + bounds.height / 2 + 40, {steps: 8}); await page.mouse.up()
+    await page.keyboard.press('ArrowRight')
+    const after = await page.evaluate(() => ({frame: {...globalThis.layerPaint!.editorStore.state.frame}, view: {...globalThis.layerPaint!.editorStore.state.view}}))
+    assert.deepEqual(after.frame, before.frame)
+    assert.ok(Math.abs(after.view.x - before.view.x - 60) < 1 && Math.abs(after.view.y - before.view.y - 40) < 1, 'Dragging inside the empty frame should pan the view.')
+    await page.evaluate(view => globalThis.layerPaint!.editorStore.set({view}), before.view)
+    await settle()
+  })
+
   await check('PNG imports, SVG reference conversion and actual JXL worker decoding', async () => {
     await (await page.$('input[aria-label="Add canvas images"]'))!.uploadFile(resolve('test/fixtures/blue.png'))
     await page.waitForFunction(() => globalThis.layerPaint?.projectStore.state.layers.length === 1)
