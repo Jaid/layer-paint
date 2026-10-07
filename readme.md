@@ -35,7 +35,7 @@ For a static deployment, the key popover accepts a browser-session key. This key
 
 1. Drop a photo onto the canvas, or choose **Imports → To canvas**. The first layer becomes the unmasked base. Further imports can be moved, resized and rotated.
 2. Drop reference images on the editor, or choose **Imports → To prompt**. Each receives a stable positive reference number. Deleting an ingredient does not renumber the others or reuse its number.
-3. Move the generation frame to the region you want to edit. Corner handles preserve its ratio. Edge handles snap between ratios advertised by the selected model. Handles appear when the pointer touches the frame.
+3. Move the generation frame to the region you want to edit. Corner handles preserve its ratio. Edge handles snap between ratios advertised by the selected model. Handles appear when the pointer touches the frame. While the canvas has no layers, the frame stays in place and dragging inside it pans the view instead.
 4. Write a prompt and choose **Generate**, or press **Ctrl+Enter**. A generation captures its input images, prompt, model settings and frame before the request is sent. Moving the frame while it runs cannot change where the result lands.
 5. Use the docked layer inspector to adjust **Area** and **Feather**. Advanced mask mode hides the generation frame and provides mask translation and roundness. Dragging inside the selected layer repositions its mask.
 6. Continue with further local edits, then use **Export** for PNG, JPG, WebP or a PNG clipboard copy. Use **Save project** for an editable `.layerpaint` backup containing the source assets and request captures.
