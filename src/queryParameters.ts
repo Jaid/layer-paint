@@ -10,7 +10,7 @@ const fraction = (value: unknown) => {
 const queryParameters = readPermalink(typeof location === 'undefined' ? '' : location.href, {schema: {
   defaults: {
     /** OpenRouter image model to use, with or without vendor prefix */
-    model: 'google\u{2F}gemini-3.1-flash-lite-image',
+    model: 'google\u{2F}gemini-nano-banana-2.1',
     /** frame aspect ratio like “16:9”; falls back to the closest ratio the model supports */
     ratio: '1:1',
     /** resolution tier like “1K”, “2K” or “4K”; empty uses the model default */
