@@ -156,6 +156,21 @@ describe('components', () => {
     expect(container.querySelector('footer')).toBeNull()
     expect(container.textContent).not.toMatch(/Undo|Redo/)
     expect(container.querySelectorAll('input[type="range"]')).toHaveLength(2)
+    expect(defaultGeneratedMask).toEqual({
+      area: 1,
+      feather: 0,
+    })
+    // Only right-click opens the layer menu; the mask thumbnail replaces the advanced mask button.
+    expect(container.querySelector('[aria-label^="Actions for"]')).toBeNull()
+    expect(container.textContent).not.toContain('Advanced mask')
+    const maskThumbnails = container.querySelectorAll<HTMLButtonElement>('[data-testid="mask-thumbnail"]')
+    expect(maskThumbnails).toHaveLength(1)
+    act(() => maskThumbnails[0].click())
+    expect(editorStore.state.tool).toBe('mask')
+    expect(maskThumbnails[0].getAttribute('aria-pressed')).toBe('true')
+    expect(container.querySelectorAll('input[type="range"]')).toHaveLength(5)
+    act(() => maskThumbnails[0].click())
+    expect(editorStore.state.tool).toBe('frame')
     act(() => editorStore.set({selectedLayerId: 'a'}))
     const second = await renderComponent('LayersPanel')
     expect(second.container.querySelectorAll('input[type="range"]')).toHaveLength(0)

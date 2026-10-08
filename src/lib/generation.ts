@@ -1,7 +1,7 @@
 import type {Rect} from './geometry.ts'
 import type {GenerationEvidence, Job, Layer} from './state.ts'
 
-import {createIngredient, selectLayer, withIngredient, workspaceEpoch} from './actions.ts'
+import {createIngredient, withIngredient, workspaceEpoch} from './actions.ts'
 import {registerOutput} from './alignment/index.ts'
 import {apiKeyStore, getApiKey, hasApiKey, refreshApiStatus, requestApiKey} from './apiKey.ts'
 import {assets} from './assets.ts'
@@ -249,7 +249,6 @@ export async function generate(overrides: GenerationOverrides = {}) {
       ...state,
       jobs: state.jobs.filter(item => item.id !== job.id),
     }))
-    selectLayer(layer.id)
   } catch (error) {
     if (!current()) {
       editorStore.set(state => ({

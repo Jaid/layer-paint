@@ -20,7 +20,7 @@ const queryParameters = readPermalink(typeof location === 'undefined' ? '' : loc
     /** initial prompt text, overrides the stored prompt */
     prompt: '',
     /** default feathering for new generated layers, 0–1 or 0–100 */
-    feather: 0.12,
+    feather: 0,
     /** default mask area for new generated layers, 0–1 or 0–100 */
     area: 1,
     /** whether generated results that the model shifted or zoomed are automatically registered back onto the canvas */
