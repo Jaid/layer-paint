@@ -7,6 +7,7 @@ import LayersPanel from '#component/LayersPanel'
 import Notices from '#component/Notices'
 import PromptPanel from '#component/PromptPanel'
 import Viewport from '#component/Viewport'
+import ZoomIndicator from '#component/ZoomIndicator'
 import {fitViewToFrame, setModel} from '#src/lib/actions.ts'
 import {refreshApiStatus} from '#src/lib/apiKey.ts'
 import {persistenceStore, startAutosave} from '#src/lib/autosave.ts'
@@ -58,7 +59,7 @@ export default function App() {
       <Group key={stacked ? 'stacked' : 'split'} className={css.group} orientation={stacked ? 'vertical' : 'horizontal'}>
         <Panel className={css.pane} defaultSize={stacked ? '50%' : '42%'} minSize={stacked ? '240px' : '350px'}><PromptPanel /><DropOverlay target='editor' /></Panel>
         <Separator className={css.separator} />
-        <Panel className={css.pane} minSize={stacked ? '240px' : '380px'}><div className={css.canvasPane} data-drop-target='canvas'><div className={css.stage}><Viewport /><Notices /><DropOverlay target='canvas' /></div><LayersPanel /></div></Panel>
+        <Panel className={css.pane} minSize={stacked ? '240px' : '380px'}><div className={css.canvasPane} data-drop-target='canvas'><div className={css.stage}><Viewport /><ZoomIndicator /><Notices /><DropOverlay target='canvas' /></div><LayersPanel /></div></Panel>
       </Group>
     </div>
     {!hydrated && <div className={css.loading} role='status'>Opening your workspace…</div>}

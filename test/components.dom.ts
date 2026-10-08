@@ -1,4 +1,4 @@
-import {afterEach, describe, expect, mock, test} from 'bun:test'
+import {afterEach, describe, expect, jest, mock, test} from 'bun:test'
 
 import {act, cleanup, fireEvent, render} from '@testing-library/react'
 import {createElement} from 'react'
@@ -32,6 +32,7 @@ async function renderComponent(componentSegment: string, options: RenderOptions 
 }
 afterEach(() => {
   cleanup()
+  jest.useRealTimers()
   globalThis.history.replaceState(null, '', '/')
 })
 describe('components', () => {
@@ -108,6 +109,49 @@ describe('components', () => {
       ingredients: [],
       layers: [],
     }))
+  })
+  test('LayersPanel no longer shows the zoom level', async () => {
+    const {editorStore} = await import('#src/lib/state.ts')
+    act(() => editorStore.set({layersPanelOpen: true}))
+    const {container} = await renderComponent('LayersPanel')
+    expect(container.textContent).not.toMatch(/\d+%/)
+  })
+  test('ZoomIndicator appears briefly whenever the zoom level changes', async () => {
+    const {editorStore} = await import('#src/lib/state.ts')
+    const {zoomIndicatorDuration} = await import('#src/components/ZoomIndicator/index.tsx')
+    act(() => editorStore.set({view: {
+      x: 0,
+      y: 0,
+      scale: 1,
+    }}))
+    jest.useFakeTimers()
+    const {getByTestId} = await renderComponent('ZoomIndicator')
+    const indicator = getByTestId('zoom-indicator')
+    expect(indicator.hasAttribute('data-visible')).toBe(false)
+    // Panning keeps the scale and must not reveal the indicator.
+    act(() => editorStore.set({view: {
+      x: 40,
+      y: 20,
+      scale: 1,
+    }}))
+    expect(indicator.hasAttribute('data-visible')).toBe(false)
+    act(() => editorStore.set({view: {
+      ...editorStore.state.view,
+      scale: 1.25,
+    }}))
+    expect(indicator.hasAttribute('data-visible')).toBe(true)
+    expect(indicator.textContent).toBe('125%')
+    // A further change restarts the countdown.
+    act(() => jest.advanceTimersByTime(zoomIndicatorDuration / 2))
+    act(() => editorStore.set({view: {
+      ...editorStore.state.view,
+      scale: 1.5,
+    }}))
+    act(() => jest.advanceTimersByTime(zoomIndicatorDuration - 1))
+    expect(indicator.hasAttribute('data-visible')).toBe(true)
+    expect(indicator.textContent).toBe('150%')
+    act(() => jest.advanceTimersByTime(1))
+    expect(indicator.hasAttribute('data-visible')).toBe(false)
   })
   test('CanvasToolbar', async () => {
     const {container} = await renderComponent('CanvasToolbar')
