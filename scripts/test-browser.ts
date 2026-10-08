@@ -174,9 +174,11 @@ try {
     assert.equal(await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length), layers)
   })
 
-  await check('Context menu contains Frame it instead of a persistent layer button', async () => {
+  await check('Right-clicking a layer row opens its context menu; there is no actions button', async () => {
     assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === 'Frame it').length), 0)
-    await page.click('[aria-label="Actions for red"]')
+    assert.equal(await page.$('[aria-label^="Actions for"]'), null)
+    assert.equal(await page.evaluate(() => globalThis.layerPaint!.editorStore.state.selectedLayerId), null, 'New layers are not auto-selected')
+    await page.click('[title="Select red"]', {button: 'right'})
     await page.waitForSelector('[role="menu"]')
     await button('Frame it')
     await page.waitForFunction(() => !document.querySelector('[role="menu"]'))
@@ -285,8 +287,12 @@ try {
     assert.deepEqual(evidence.rect, frame); assert.deepEqual(evidence.frame, frame); assert.equal(evidence.prompt, 'A localized detail repair'); assert.ok(evidence.canvas && evidence.canvas !== evidence.output)
   })
 
-  await check('Advanced mask hides the frame and exposes contracted/feather bounds', async () => {
-    await button('Advanced mask')
+  await check('The mask thumbnail enters mask mode, hides the frame and exposes contracted/feather bounds', async () => {
+    const defaults = await page.evaluate(() => {const h = globalThis.layerPaint!, layer = h.projectStore.state.layers.at(-1)!; return {area: layer.area, feather: layer.feather, selected: h.editorStore.state.selectedLayerId === layer.id}})
+    assert.deepEqual(defaults, {area: 1, feather: 0, selected: false}, 'Generated layers default to a 100% area, unfeathered mask and are not auto-selected')
+    assert.equal(await page.$$eval('[data-testid="mask-thumbnail"]', nodes => nodes.length), await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length - 1), 'Every non-base layer has a mask thumbnail')
+    await page.click('[aria-label="Edit the mask of A localized detail repair"]')
+    assert.equal(await page.evaluate(() => {const h = globalThis.layerPaint!; return h.editorStore.state.tool === 'mask' && h.editorStore.state.selectedLayerId === h.projectStore.state.layers.at(-1)!.id}), true)
     assert.equal(await page.$('[data-testid="frame"]'), null)
     await page.evaluate(() => {
       const h = globalThis.layerPaint!, layer = h.projectStore.state.layers.at(-1)!
