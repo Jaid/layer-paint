@@ -6,6 +6,7 @@ import type {HTTPRequest, Page} from 'puppeteer-core'
 import type {ImageRequest} from '../src/lib/imageApi.ts'
 import {startServer} from './server.ts'
 import catalog from '../src/lib/models/catalog.json'
+import {adjustColor, getAdjustmentParameters} from '../src/lib/adjustments/color.ts'
 
 const candidates = [Bun.env.CHROME_PATH, Bun.which('chrome'), Bun.which('chromium'), 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter((path): path is string => Boolean(path))
 const executablePath = (await Promise.all(candidates.map(async path => await Bun.file(path).exists() ? path : undefined))).find(Boolean)
@@ -89,7 +90,7 @@ try {
     assert.equal(layout.count, 1); assert.ok(layout.frameWidth > 100); assert.ok(Math.abs(layout.frameWidth - layout.frameHeight) < 1); assert.ok(layout.canvasRight <= layout.dockLeft + 1)
   })
 
-  await check('An empty canvas keeps the frame in place and pans instead', async () => {
+  await check('An empty canvas keeps the frame in place and unscalable and pans instead', async () => {
     await settle()
     const before = await page.evaluate(() => ({frame: {...globalThis.layerPaint!.editorStore.state.frame}, view: {...globalThis.layerPaint!.editorStore.state.view}, layers: globalThis.layerPaint!.projectStore.state.layers.length}))
     assert.equal(before.layers, 0)
@@ -100,6 +101,17 @@ try {
     const after = await page.evaluate(() => ({frame: {...globalThis.layerPaint!.editorStore.state.frame}, view: {...globalThis.layerPaint!.editorStore.state.view}}))
     assert.deepEqual(after.frame, before.frame)
     assert.ok(Math.abs(after.view.x - before.view.x - 60) < 1 && Math.abs(after.view.y - before.view.y - 40) < 1, 'Dragging inside the empty frame should pan the view.')
+    await page.evaluate(view => globalThis.layerPaint!.editorStore.set({view}), before.view)
+    await settle()
+    // Touching the frame edge reveals no handles, and dragging its corner or edge does not scale it.
+    await page.mouse.move(bounds.x + bounds.width, bounds.y + bounds.height / 2)
+    await new Promise(resolve => setTimeout(resolve, 150))
+    assert.equal(await page.$$eval('[data-corner], [data-edge]', nodes => nodes.length), 0)
+    for (const [x, y] of [[bounds.x + bounds.width, bounds.y + bounds.height], [bounds.x + bounds.width, bounds.y + bounds.height / 2]]) {
+      await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + 70, y + 50, {steps: 8}); await page.mouse.up()
+    }
+    const scaled = await page.evaluate(() => ({frame: {...globalThis.layerPaint!.editorStore.state.frame}, ratio: globalThis.layerPaint!.editorStore.state.ratio}))
+    assert.deepEqual(scaled.frame, before.frame); assert.equal(scaled.ratio, '1:1')
     await page.evaluate(view => globalThis.layerPaint!.editorStore.set({view}), before.view)
     await settle()
   })
@@ -285,6 +297,82 @@ try {
     await page.waitForFunction(count => globalThis.layerPaint?.projectStore.state.layers.length === count + 1, {}, layerCount)
     const evidence = await page.evaluate(() => {const layer = globalThis.layerPaint!.projectStore.state.layers.at(-1)!; return {rect: layer.rect, frame: layer.evidence!.frame, prompt: layer.evidence!.prompt, canvas: layer.evidence!.canvasAssetId, output: layer.evidence!.outputAssetId}})
     assert.deepEqual(evidence.rect, frame); assert.deepEqual(evidence.frame, frame); assert.equal(evidence.prompt, 'A localized detail repair'); assert.ok(evidence.canvas && evidence.canvas !== evidence.output)
+  })
+
+  await check('Content-aware alignment is analyzed once and then toggles instantly', async () => {
+    assert.equal(await page.$('details'), null, 'The prompt panel options menu is gone')
+    const id = await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.at(-1)!.id)
+    await page.click('[title="Select A localized detail repair"]')
+    const toggle = await page.waitForSelector('[data-testid="content-aware"]:not(:disabled)')
+    const start = performance.now()
+    await toggle!.click()
+    await page.waitForFunction(id => {const layer = globalThis.layerPaint!.projectStore.state.layers.find(item => item.id === id)!; return layer.contentAware === true && Boolean(layer.alignment)}, {timeout: 30000}, id)
+    console.log(`  first analysis took ${Math.round(performance.now() - start)} ms`)
+    const toggles = await page.evaluate(async id => {
+      const h = globalThis.layerPaint!, results: Array<{checked: boolean; enabled: boolean | undefined; ms: number}> = []
+      for (let index = 0; index < 4; index++) {
+        const input = document.querySelector<HTMLInputElement>('[data-testid="content-aware"]')!
+        const begin = performance.now(); input.click()
+        results.push({ms: performance.now() - begin, enabled: h.projectStore.state.layers.find(item => item.id === id)!.contentAware, checked: false})
+        await new Promise(resolve => requestAnimationFrame(resolve))
+        results.at(-1)!.checked = document.querySelector<HTMLInputElement>('[data-testid="content-aware"]')!.checked
+      }
+      return results
+    }, id)
+    // Cached toggles update the document synchronously, without another worker round trip.
+    assert.deepEqual(toggles.map(item => item.enabled), [false, true, false, true])
+    assert.deepEqual(toggles.map(item => item.checked), [false, true, false, true])
+    assert.ok(toggles.every(item => item.ms < 100), JSON.stringify(toggles))
+    await page.click('[data-testid="content-aware"]')
+    assert.equal(await page.evaluate(id => globalThis.layerPaint!.projectStore.state.layers.find(item => item.id === id)!.contentAware, id), false)
+  })
+
+  await check('Adjustment sliders edit the selected layer and render like the reference color math', async () => {
+    const id = await page.evaluate(() => globalThis.layerPaint!.editorStore.state.selectedLayerId!)
+    assert.deepEqual(await page.$$eval('[data-testid="adjustments"] [data-adjustment]', nodes => nodes.map(node => (node as HTMLElement).dataset.adjustment)), ['brightness', 'contrast', 'gamma', 'saturation', 'vibrance', 'temperature'])
+    await page.focus('[data-adjustment="saturation"]')
+    for (let index = 0; index < 10; index++) await page.keyboard.press('ArrowRight')
+    assert.deepEqual(await page.evaluate(id => globalThis.layerPaint!.projectStore.state.layers.find(item => item.id === id)!.adjustments, id), {saturation: 0.1})
+    await button('Reset adjustments')
+    assert.equal(await page.evaluate(id => globalThis.layerPaint!.projectStore.state.layers.find(item => item.id === id)!.adjustments, id), undefined)
+    const adjustments = {brightness: 0.15, contrast: 0.3, gamma: -0.2, saturation: 0.4, vibrance: 0.5, temperature: -0.35}
+    const sample = await page.evaluate(async adjustments => {
+      const h = globalThis.layerPaint!, side = 48
+      const source = new OffscreenCanvas(side, side), context = source.getContext('2d')!
+      const hue = context.createLinearGradient(0, 0, side, 0)
+      for (let stop = 0; stop <= 6; stop++) hue.addColorStop(stop / 6, `hsl(${stop * 60} 80% 50%)`)
+      context.fillStyle = hue; context.fillRect(0, 0, side, side)
+      const shade = context.createLinearGradient(0, 0, 0, side - 8)
+      shade.addColorStop(0, 'rgb(255 255 255 / 70%)'); shade.addColorStop(0.5, 'transparent'); shade.addColorStop(1, 'rgb(0 0 0 / 70%)')
+      context.fillStyle = shade; context.fillRect(0, 0, side, side)
+      context.clearRect(0, side - 8, side, 8)
+      // semi-transparent rows catch premultiplied-alpha mistakes
+      context.fillStyle = 'rgb(200 90 50 / 40%)'; context.fillRect(0, side - 8, side / 2, 4)
+      context.fillStyle = 'rgb(40 120 220 / 75%)'; context.fillRect(side / 2, side - 8, side / 2, 4)
+      const asset = await h.assets.add(await source.convertToBlob({type: 'image/png'}))
+      const layer = {id: 'adjusted', assetId: asset.id, name: 'Adjusted', kind: 'import' as const, createdAt: 0, visible: true, area: 1, feather: 0, rect: {x: 0, y: 0, width: side, height: side}}
+      const read = (layerAdjustments?: typeof adjustments) => [...h.renderRegion({layers: [{...layer, adjustments: layerAdjustments}], region: layer.rect, size: {width: side, height: side}, measureEmpty: false}).canvas.getContext('2d')!.getImageData(0, 0, side, side).data]
+      return {source: read(), adjusted: read(adjustments), webgl: new OffscreenCanvas(1, 1).getContext('webgl2') !== null}
+    }, adjustments)
+    const parameters = getAdjustmentParameters(adjustments)
+    let maxDifference = 0, changed = 0
+    for (let index = 0; index < sample.source.length; index += 4) {
+      if (sample.source[index + 3] === 0) {
+        assert.equal(sample.adjusted[index + 3], 0, 'Transparent pixels stay transparent'); continue
+      }
+      const expected = adjustColor([sample.source[index] / 255, sample.source[index + 1] / 255, sample.source[index + 2] / 255], parameters).map(value => Math.round(value * 255))
+      assert.equal(sample.adjusted[index + 3], sample.source[index + 3], 'Adjustments keep alpha')
+      // Premultiplied storage quantizes translucent colors more coarsely.
+      const tolerance = 255 / sample.source[index + 3] - 1
+      for (let channel = 0; channel < 3; channel++) {
+        maxDifference = Math.max(maxDifference, Math.abs(expected[channel] - sample.adjusted[index + channel]) - tolerance)
+        changed += sample.source[index + channel] === sample.adjusted[index + channel] ? 0 : 1
+      }
+    }
+    console.log(`  ${sample.webgl ? 'WebGL 2' : 'CPU fallback'} · max channel deviation beyond alpha quantization ${maxDifference.toFixed(2)}`)
+    assert.ok(changed > sample.source.length / 4, 'Adjustments must visibly change the pixels')
+    assert.ok(maxDifference <= 2, `Rendered adjustments deviate from the reference by ${maxDifference}`)
+    await page.evaluate(() => {const h = globalThis.layerPaint!; h.actions.selectLayer(null); h.editorStore.set({hoveredLayerId: null})})
   })
 
   await check('The mask thumbnail enters mask mode, hides the frame and exposes contracted/feather bounds', async () => {

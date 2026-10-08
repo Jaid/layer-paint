@@ -108,6 +108,11 @@ describe('components', () => {
     act(() => toggle.click())
     expect(editorStore.state.frameEnabled).toBe(true)
   })
+  test('the prompt panel has no options menu any more', async () => {
+    const {container} = await renderComponent('PromptPanel')
+    expect(container.querySelector('details')).toBeNull()
+    expect(container.textContent).not.toMatch(/Options|drift correction/)
+  })
   test('project actions share the title row', async () => {
     const {container} = await renderComponent('PromptPanel')
     const header = container.querySelector('header')!
@@ -155,9 +160,21 @@ describe('components', () => {
     expect(container.querySelector('[role="group"]')).toBeNull()
     expect(container.querySelector('footer')).toBeNull()
     expect(container.textContent).not.toMatch(/Undo|Redo/)
-    // Selecting the image itself shows no mask controls.
-    expect(container.querySelectorAll('input[type="range"]')).toHaveLength(0)
+    // Selecting the image itself shows the color adjustments and content-aware alignment, but no mask controls.
+    const adjustmentSliders = () => [...container.querySelectorAll<HTMLInputElement>('input[type="range"][data-adjustment]')].map(input => input.dataset.adjustment)
+    expect(adjustmentSliders()).toEqual(['brightness', 'contrast', 'gamma', 'saturation', 'vibrance', 'temperature'])
+    expect(container.querySelectorAll('input[type="range"]:not([data-adjustment])')).toHaveLength(0)
     expect(container.textContent).not.toMatch(/Area|Feather/)
+    expect(container.textContent).toContain('White balance')
+    const contentAware = container.querySelector<HTMLInputElement>('[data-testid="content-aware"]')!
+    expect(contentAware).not.toBeNull()
+    // Without a captured canvas input there is nothing to align against.
+    expect(contentAware.disabled).toBe(true)
+    fireEvent.change(container.querySelector('[data-adjustment="saturation"]')!, {target: {value: '40'}})
+    expect(projectStore.state.layers[1].adjustments).toEqual({saturation: 0.4})
+    fireEvent.change(container.querySelector('[data-adjustment="saturation"]')!, {target: {value: '0'}})
+    // A neutral look is stored as no adjustments at all.
+    expect('adjustments' in projectStore.state.layers[1]).toBe(false)
     expect(defaultGeneratedMask).toEqual({
       area: 1,
       feather: 0,
@@ -171,14 +188,19 @@ describe('components', () => {
     expect(editorStore.state.tool).toBe('mask')
     expect(maskThumbnails[0].getAttribute('aria-pressed')).toBe('true')
     expect(container.querySelectorAll('input[type="range"]')).toHaveLength(5)
+    expect(adjustmentSliders()).toEqual([])
+    expect(container.querySelector('[data-testid="content-aware"]')).toBeNull()
     expect(container.textContent).toContain('Area')
     expect(container.textContent).toContain('Feather')
     act(() => maskThumbnails[0].click())
     expect(editorStore.state.tool).toBe('frame')
-    expect(container.querySelectorAll('input[type="range"]')).toHaveLength(0)
+    expect(container.querySelectorAll('input[type="range"]:not([data-adjustment])')).toHaveLength(0)
     act(() => editorStore.set({selectedLayerId: 'a'}))
     const second = await renderComponent('LayersPanel')
-    expect(second.container.querySelectorAll('input[type="range"]')).toHaveLength(0)
+    // The base layer has adjustments too, but no mask and no alignment.
+    expect(second.container.querySelectorAll('input[type="range"]:not([data-adjustment])')).toHaveLength(0)
+    expect(second.container.querySelectorAll('input[type="range"][data-adjustment]')).toHaveLength(6)
+    expect(second.container.querySelector('[data-testid="content-aware"]')).toBeNull()
     act(() => projectStore.reset({
       ingredients: [],
       layers: [],

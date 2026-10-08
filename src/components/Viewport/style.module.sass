@@ -182,27 +182,82 @@
 .activeFrame
   border-color: #fff4d0
 
+@property --charge-angle
+  syntax: '<angle>'
+  inherits: false
+  initial-value: 0deg
+
+// Hovering Generate charges the frame: a prismatic border orbits it, light sweeps across and the halo pulses.
 .charged
-  border-color: #fff0b7
-  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 24%), 0 0 42px rgb(242 207 126 / 38%), inset 0 0 35px rgb(245 220 158 / 16%)
+  border-color: rgb(255 240 183 / 35%)
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 36%), 0 0 28px rgb(255 214 140 / 55%), 0 0 90px rgb(255 140 190 / 22%), inset 0 0 50px rgb(245 220 158 / 22%)
+  animation: chargeHalo 1.3s ease-in-out infinite alternate
+  @include light
+    border-color: rgb(153 100 26 / 40%)
+    box-shadow: 0 0 0 100vmax rgb(255 255 255 / 30%), 0 0 26px rgb(214 140 40 / 45%), 0 0 70px rgb(220 80 160 / 18%)
+    animation-name: chargeHaloLight
+  &::before
+    content: ''
+    position: absolute
+    inset: -3px
+    padding: 3px
+    border-radius: 3px
+    background: conic-gradient(from var(--charge-angle), #fff3c4, #ffb35c, #ff5f9e, #b98bff, #67d9ff, #b98bff, #ff5f9e, #ffb35c, #fff3c4)
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)
+    animation: chargeSpin 1.8s linear infinite
+    pointer-events: none
   &::after
     content: ''
     position: absolute
     inset: 0
-    background: radial-gradient(ellipse at 25% 30%, rgb(220 181 115 / 20%), transparent 60%), radial-gradient(ellipse at 75% 70%, rgb(165 181 229 / 16%), transparent 55%)
-    animation: breathe 2.4s ease-in-out infinite alternate
+    background: linear-gradient(110deg, transparent 38%, rgb(255 248 220 / 34%) 48%, rgb(255 255 255 / 55%) 50%, rgb(255 248 220 / 34%) 52%, transparent 62%) 0 0 / 300% 100% no-repeat, radial-gradient(ellipse at 25% 30%, rgb(255 190 110 / 30%), transparent 60%), radial-gradient(ellipse at 75% 70%, rgb(150 160 255 / 26%), transparent 58%)
+    mix-blend-mode: screen
+    animation: chargeSweep 1.9s cubic-bezier(0.55, 0, 0.3, 1) infinite, chargeAurora 2.4s ease-in-out infinite alternate
     pointer-events: none
+    @include light
+      mix-blend-mode: normal
+  @include static
+    animation: none
+    &::before, &::after
+      animation: none
 
-@keyframes breathe
-  from
-    opacity: 0.4
-    filter: hue-rotate(-12deg)
+// The frame-off preview keeps its dashed outline; its ring orbits just outside.
+.contentRegion.charged
+  border-color: #fff0b7
+  &::before
+    inset: -8px
+    padding: 2px
+    border-radius: 6px
+    opacity: 85%
+
+@keyframes chargeSpin
   to
-    opacity: 1
-    filter: hue-rotate(14deg)
+    --charge-angle: 360deg
+
+@keyframes chargeSweep
+  from
+    background-position: 150% 0, 0 0, 0 0
+  to
+    background-position: -50% 0, 0 0, 0 0
+
+@keyframes chargeAurora
+  from
+    filter: hue-rotate(-20deg) saturate(1)
+  to
+    filter: hue-rotate(25deg) saturate(1.5)
+
+@keyframes chargeHalo
+  from
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 34%), 0 0 22px rgb(255 214 140 / 45%), 0 0 70px rgb(255 140 190 / 16%), inset 0 0 40px rgb(245 220 158 / 18%)
+  to
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 40%), 0 0 44px rgb(255 224 160 / 75%), 0 0 130px rgb(185 139 255 / 32%), inset 0 0 70px rgb(245 220 158 / 30%)
+
+@keyframes chargeHaloLight
+  from
+    box-shadow: 0 0 0 100vmax rgb(255 255 255 / 26%), 0 0 18px rgb(214 140 40 / 35%), 0 0 50px rgb(220 80 160 / 12%)
+  to
+    box-shadow: 0 0 0 100vmax rgb(255 255 255 / 34%), 0 0 36px rgb(214 140 40 / 60%), 0 0 100px rgb(140 90 230 / 24%)
 
 @media (prefers-reduced-motion: reduce)
-  .charged::after
-    animation: none
   .frame, .handle, .edgeHandle
     transition: none

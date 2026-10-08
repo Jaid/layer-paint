@@ -15,12 +15,72 @@
   background: oklch(40% 0.15 25 / 30%)
   outline: 1px solid oklch(65% 0.2 25 / 70%)
 
+@property --job-angle
+  syntax: '<angle>'
+  inherits: false
+  initial-value: 0deg
+
+.overlay:not(.failed)
+  background: rgb(4 3 10 / 46%)
+  box-shadow: 0 0 34px oklch(80% 0.17 70 / 38%), 0 0 110px oklch(65% 0.22 330 / 20%)
+  animation: pulse 1.6s ease-in-out infinite alternate
+  @include light
+    background: rgb(255 255 255 / 40%)
+    box-shadow: 0 0 30px oklch(70% 0.17 70 / 40%)
+  @include static
+    animation: none
+
+// a swirling aurora of the brand colors
 .shimmer
   position: absolute
-  inset: -50%
-  background: conic-gradient(from 0deg, transparent 0 70%, oklch(86% 0.17 85 / 22%) 85%, transparent 100%)
-  animation: spin 2.4s linear infinite
-  filter: blur(24px)
+  inset: -60%
+  background: conic-gradient(from 0deg, transparent 0 8%, oklch(86% 0.17 85 / 42%) 18%, transparent 30%, oklch(70% 0.22 340 / 34%) 46%, transparent 58%, oklch(78% 0.14 220 / 36%) 74%, transparent 88%)
+  filter: blur(30px) saturate(1.4)
+  mix-blend-mode: screen
+  animation: spin 3.2s linear infinite
+  @include light
+    mix-blend-mode: multiply
+    opacity: 55%
+  @include static
+    animation: none
+
+// rising embers
+.sparks
+  position: absolute
+  inset: 0
+  background-image: radial-gradient(circle, rgb(255 236 180 / 95%) 0 1.2px, transparent 2px), radial-gradient(circle, rgb(255 160 210 / 80%) 0 1px, transparent 1.6px), radial-gradient(circle, rgb(150 220 255 / 80%) 0 0.8px, transparent 1.4px)
+  background-size: 53px 61px, 37px 43px, 71px 29px
+  mask: linear-gradient(to top, transparent, #000 25%, #000 60%, transparent)
+  mix-blend-mode: screen
+  animation: rise 2.8s linear infinite, twinkle 0.9s ease-in-out infinite alternate
+  @include light
+    mix-blend-mode: normal
+    opacity: 50%
+  @include static
+    animation: none
+
+// a bright scanline sweeping top to bottom
+.scan
+  position: absolute
+  inset: 0
+  background: linear-gradient(to bottom, transparent 0, oklch(90% 0.12 85 / 0%) 40%, oklch(92% 0.14 85 / 30%) 48%, rgb(255 255 255 / 70%) 50%, oklch(92% 0.14 85 / 30%) 52%, transparent 60%) 0 0 / 100% 300% no-repeat
+  mix-blend-mode: screen
+  animation: scan 2.1s cubic-bezier(0.6, 0, 0.35, 1) infinite
+  @include light
+    mix-blend-mode: normal
+    opacity: 60%
+  @include static
+    display: none
+
+// prismatic border orbiting the generation area
+.ring
+  position: absolute
+  inset: 0
+  padding: 2px
+  border-radius: inherit
+  background: conic-gradient(from var(--job-angle), oklch(92% 0.12 90), oklch(80% 0.17 60), oklch(68% 0.24 350), oklch(70% 0.18 300), oklch(82% 0.13 220), oklch(70% 0.18 300), oklch(68% 0.24 350), oklch(80% 0.17 60), oklch(92% 0.12 90))
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)
+  animation: orbit 1.4s linear infinite
   @include static
     animation: none
 
@@ -89,3 +149,31 @@
 @keyframes spin
   to
     rotate: 360deg
+
+@keyframes orbit
+  to
+    --job-angle: 360deg
+
+@keyframes scan
+  from
+    background-position: 0 100%
+  to
+    background-position: 0 0%
+
+@keyframes rise
+  from
+    background-position: 0 0, 0 0, 0 0
+  to
+    background-position: 0 -61px, 0 -86px, 0 -58px
+
+@keyframes twinkle
+  from
+    opacity: 55%
+  to
+    opacity: 100%
+
+@keyframes pulse
+  from
+    box-shadow: 0 0 24px oklch(80% 0.17 70 / 28%), 0 0 80px oklch(65% 0.22 330 / 14%)
+  to
+    box-shadow: 0 0 46px oklch(84% 0.17 75 / 55%), 0 0 140px oklch(65% 0.22 330 / 30%)

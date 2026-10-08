@@ -6,6 +6,7 @@ import type {CommitOptions} from './store/index.ts'
 
 import {createId} from '#src/lib/createId.ts'
 
+import {normalizeAdjustments} from './adjustments/index.ts'
 import {assets} from './assets.ts'
 import {getContentBounds} from './composite.ts'
 import {containSize, coverRect, rectCenter, rectFromCenter, sizeFromArea} from './geometry.ts'
@@ -117,7 +118,9 @@ const mapLayers = (document: ProjectDocument, id: string, mapper: (layer: Layer)
   layers: document.layers.map(layer => (layer.id === id ? mapper(layer) : layer)),
 })
 
-export const updateLayer = (id: string, patch: Partial<Pick<Layer, 'area' | 'feather' | 'featherAllEdges' | 'name' | 'offsetX' | 'offsetY' | 'rect' | 'rotation' | 'roundness' | 'visible'>>, options: CommitOptions = {}) => {
+export type LayerPatch = Partial<Pick<Layer, 'adjustments' | 'area' | 'contentAware' | 'feather' | 'featherAllEdges' | 'name' | 'offsetX' | 'offsetY' | 'rect' | 'rotation' | 'roundness' | 'visible'>>
+
+export const updateLayer = (id: string, patch: LayerPatch, options: CommitOptions = {}) => {
   const layer = getLayer(id)
   if (!layer) {
     return
@@ -150,10 +153,20 @@ export const updateLayer = (id: string, patch: Partial<Pick<Layer, 'area' | 'fea
       return
     } patch.rotation = ((patch.rotation + 180) % 360 + 360) % 360 - 180
   }
-  projectStore.commit(document => mapLayers(document, id, current => ({
-    ...current,
-    ...patch,
-  })), options)
+  if ('adjustments' in patch) {
+    // Neutral looks are stored as no adjustments at all.
+    patch.adjustments = patch.adjustments && normalizeAdjustments(patch.adjustments)
+  }
+  projectStore.commit(document => mapLayers(document, id, current => {
+    const next = {
+      ...current,
+      ...patch,
+    }
+    if (!next.adjustments) {
+      delete next.adjustments
+    }
+    return next
+  }), options)
 }
 
 export const removeLayer = (id: string) => {

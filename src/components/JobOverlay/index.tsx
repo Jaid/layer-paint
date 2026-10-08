@@ -47,7 +47,12 @@ const JobOverlay = ({job, rect}: Props) => {
       height: rect.height,
     }}
   >
-    {running && <div className={css.shimmer} />}
+    {running && <>
+      <div className={css.shimmer} />
+      <div className={css.sparks} />
+      <div className={css.scan} />
+      <div className={css.ring} />
+    </>}
     <div className={css.panel}>
       {running ? <>
         <span className={css.spinner} />
