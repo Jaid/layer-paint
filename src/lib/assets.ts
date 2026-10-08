@@ -17,11 +17,13 @@ export type Asset = {
 }
 
 type AssetListener = () => void
+type ReleaseListener = (id: string) => void
 
 export class AssetRegistry {
   readonly #assets = new Map<string, Asset>
   readonly #listeners = new Set<AssetListener>
   readonly #pins = new Map<string, number>
+  readonly #releaseListeners = new Set<ReleaseListener>
   get ids() {
     return [...this.#assets.keys()]
   }
@@ -106,6 +108,17 @@ export class AssetRegistry {
       URL.revokeObjectURL(asset.url)
       asset.bitmap.close()
       this.#assets.delete(id)
+      for (const listener of this.#releaseListeners) {
+        listener(id)
+      }
+    }
+  }
+
+  /** notifies derived caches that an asset was freed */
+  subscribeRelease(listener: ReleaseListener) {
+    this.#releaseListeners.add(listener)
+    return () => {
+      this.#releaseListeners.delete(listener)
     }
   }
 

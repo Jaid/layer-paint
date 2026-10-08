@@ -1,10 +1,11 @@
 import type {Point, Rect, Size} from './geometry.ts'
 import type {Layer} from './state.ts'
 
+import {forgetAdjustedImages, getAdjustedImage} from './adjustments/index.ts'
 import {assets} from './assets.ts'
 import {rectIntersection, rectUnion} from './geometry.ts'
 import {createCanvas, getContext} from './image.ts'
-import {getLayerBounds, worldToLayer} from './layerGeometry.ts'
+import {getActiveAlignment, getContentRect, getLayerBounds, worldToLayer} from './layerGeometry.ts'
 import {clipMask, getSoftMask, isMaskActive, maskDistance} from './mask.ts'
 
 export type RenderRegionOptions = {
@@ -18,6 +19,8 @@ export type RenderedRegion = {
   canvas: OffscreenCanvas
   emptyFraction: number
 }
+assets.subscribeRelease(forgetAdjustedImages)
+
 export const getVisibleLayers = (layers: ReadonlyArray<Layer>) => layers.filter(layer => layer.visible)
 export const isBackgroundLayer = (layers: ReadonlyArray<Layer>, layer: Layer) => layers[0]?.id === layer.id
 
@@ -63,7 +66,14 @@ export function renderRegion(options: RenderRegionOptions): RenderedRegion {
     if (masked) {
       clipMask(target, layer, layer.rect)
     }
-    target.drawImage(asset.bitmap, 0, 0, layer.rect.width, layer.rect.height)
+    const content = getContentRect(layer)
+    if (getActiveAlignment(layer)) {
+      // A realigned output may extend beyond its captured frame; the frame still bounds the layer.
+      target.beginPath()
+      target.rect(0, 0, layer.rect.width, layer.rect.height)
+      target.clip()
+    }
+    target.drawImage(getAdjustedImage(asset.bitmap, asset.id, layer.adjustments), content.x, content.y, content.width, content.height)
     target.restore()
     if (!masked) {
       continue

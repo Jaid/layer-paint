@@ -1,4 +1,4 @@
-import readPermalink, {parseBoolean, parseNumber} from 'read-permalink'
+import readPermalink, {parseNumber} from 'read-permalink'
 
 const optionalString = (value: unknown) => (value === undefined || value === null ? '' : String(value))
 const fraction = (value: unknown) => {
@@ -23,8 +23,6 @@ const queryParameters = readPermalink(typeof location === 'undefined' ? '' : loc
     feather: 0,
     /** default mask area for new generated layers, 0–1 or 0–100 */
     area: 1,
-    /** whether generated results that the model shifted or zoomed are automatically registered back onto the canvas */
-    align: false,
   },
   normalizations: {
     model: String,
@@ -34,7 +32,6 @@ const queryParameters = readPermalink(typeof location === 'undefined' ? '' : loc
     prompt: optionalString,
     feather: fraction,
     area: fraction,
-    align: parseBoolean,
   },
 }})
 

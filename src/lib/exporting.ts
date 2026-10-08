@@ -6,7 +6,7 @@ import {assets} from './assets.ts'
 import {getContentBounds, renderRegion} from './composite.ts'
 import {rectIntersection} from './geometry.ts'
 import {encodeCanvas, MAX_EDGE, MAX_PIXELS} from './image.ts'
-import {getLayerBounds} from './layerGeometry.ts'
+import {getContentRect, getLayerBounds} from './layerGeometry.ts'
 import {getErrorMessage, notify} from './notices.ts'
 import {editorStore, projectStore} from './state.ts'
 
@@ -52,7 +52,8 @@ export function getExportPlan(layers: ReadonlyArray<Layer>, region: Rect, policy
       }
       const asset = assets.get(layer.assetId)
       if (asset) {
-        density = Math.max(density, asset.width / layer.rect.width, asset.height / layer.rect.height)
+        const content = getContentRect(layer)
+        density = Math.max(density, asset.width / content.width, asset.height / content.height)
       }
     }
   }

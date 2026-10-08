@@ -1,3 +1,5 @@
+import type {Adjustments} from './adjustments/index.ts'
+import type {Placement} from './alignment/align.ts'
 import type {Rect} from './geometry.ts'
 import type {MaskSettings} from './mask.ts'
 import type {RatioString} from './ratio.ts'
@@ -28,10 +30,20 @@ export type GenerationEvidence = {
   resolution: string
 }
 
+/** cached registration of a generated output against its captured canvas input */
+export type LayerAlignment = Placement & {
+  /** whether the registration is reliable enough to move the content; otherwise the layer stays in place */
+  applied: boolean
+}
+
 export type Layer = MaskSettings & {
-  /** set when a generated result was automatically registered because the model shifted or zoomed the content */
-  aligned?: boolean
+  /** color adjustments, applied non-destructively by the compositor */
+  adjustments?: Adjustments
+  /** computed once on demand and kept, so toggling content-aware alignment is instant */
+  alignment?: LayerAlignment
   assetId: string
+  /** whether a generated layer’s content is registered onto the canvas it was generated from */
+  contentAware?: boolean
   createdAt: number
   evidence?: GenerationEvidence
   id: string
@@ -95,7 +107,6 @@ export type Notice = {
 }
 
 export type EditorState = {
-  alignOutput: boolean
   demoMode: boolean
   exportMode: 'canvas' | 'custom' | 'detail'
   exportScale: number
@@ -142,7 +153,6 @@ export const createInitialEditorState = (): EditorState => ({
   hoveredLayerId: null,
   generationHover: false,
   demoMode: false,
-  alignOutput: queryParameters.align,
   exportMode: 'detail',
   exportScale: 1,
   frame: createFrame(initialRatio, {

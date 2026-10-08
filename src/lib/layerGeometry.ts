@@ -4,6 +4,28 @@ import type {Layer} from './state.ts'
 import {rectCenter, rectIntersection, rectUnion} from './geometry.ts'
 import {getMaskRect} from './mask.ts'
 
+/** The alignment that currently moves a layer’s content, if content-aware alignment is on and found a reliable registration. */
+export const getActiveAlignment = (layer: Pick<Layer, 'alignment' | 'contentAware'>) => (layer.contentAware && layer.alignment?.applied ? layer.alignment : undefined)
+
+/** where the layer image is drawn in layer-local coordinates; the layer rect itself still clips it */
+export function getContentRect(layer: Pick<Layer, 'alignment' | 'contentAware' | 'rect'>): Rect {
+  const alignment = getActiveAlignment(layer)
+  if (!alignment) {
+    return {
+      x: 0,
+      y: 0,
+      width: layer.rect.width,
+      height: layer.rect.height,
+    }
+  }
+  return {
+    x: alignment.x * layer.rect.width,
+    y: alignment.y * layer.rect.height,
+    width: alignment.scale * layer.rect.width,
+    height: alignment.scale * layer.rect.height,
+  }
+}
+
 export function layerToWorld(layer: Pick<Layer, 'rect' | 'rotation'>, local: Point): Point {
   const angle = (layer.rotation ?? 0) * Math.PI / 180
   const center = rectCenter(layer.rect); const x = local.x - layer.rect.width / 2; const y = local.y - layer.rect.height / 2

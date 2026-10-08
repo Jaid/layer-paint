@@ -7,7 +7,7 @@ export type StoredAsset = {
   blob: Blob
   id: string
 }
-export type PersistedEditorState = Pick<EditorState, 'alignOutput' | 'demoMode' | 'exportMode' | 'exportScale' | 'frame' | 'frameEnabled' | 'layersPanelOpen' | 'modelId' | 'prompt' | 'quality' | 'ratio' | 'resolution' | 'view'>
+export type PersistedEditorState = Pick<EditorState, 'demoMode' | 'exportMode' | 'exportScale' | 'frame' | 'frameEnabled' | 'layersPanelOpen' | 'modelId' | 'prompt' | 'quality' | 'ratio' | 'resolution' | 'view'>
 export type StoredProject = {
   document: ProjectDocument
   editor: PersistedEditorState

@@ -1,7 +1,9 @@
+import type {Adjustments} from './adjustments/index.ts'
 import type {Rect} from './geometry.ts'
 import type {PersistedEditorState} from './persistence.ts'
-import type {GenerationEvidence, Ingredient, Layer, ProjectDocument} from './state.ts'
+import type {GenerationEvidence, Ingredient, Layer, LayerAlignment, ProjectDocument} from './state.ts'
 
+import {adjustmentKeys, normalizeAdjustments} from './adjustments/index.ts'
 import {findModel} from './models/index.ts'
 import {closestRatio, isRatioString, parseRatio} from './ratio.ts'
 
@@ -72,8 +74,20 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
     if (v.prompt !== undefined) {
       result.prompt = text(v.prompt, 110_000)
     }
-    if (v.aligned !== undefined) {
-      result.aligned = bool(v.aligned)
+    if (v.contentAware !== undefined) {
+      result.contentAware = bool(v.contentAware)
+    }
+    if (v.alignment !== undefined) {
+      result.alignment = alignment(v.alignment)
+    }
+    if (v.adjustments !== undefined) {
+      const adjustments = parseAdjustments(v.adjustments)
+      if (adjustments) {
+        result.adjustments = adjustments
+      }
+    }
+    if ((result.contentAware || result.alignment) && result.kind !== 'generated') {
+      return fail()
     }
     const captured = evidence(v.evidence)
     if (captured) {
@@ -163,9 +177,32 @@ export function parseEditor(value: unknown): PersistedEditorState {
     quality: model.normalizeQuality(typeof value.quality === 'string' ? value.quality : '') ?? '',
     exportMode: ['canvas', 'custom', 'detail'].includes(String(value.exportMode)) ? value.exportMode as 'canvas' | 'custom' | 'detail' : 'detail',
     exportScale: typeof value.exportScale === 'number' ? number(value.exportScale, 0.01, 64) : 1,
-    alignOutput: typeof value.alignOutput === 'boolean' ? value.alignOutput : false,
     demoMode: typeof value.demoMode === 'boolean' ? value.demoMode : false,
   }
+}
+
+function alignment(v: unknown): LayerAlignment {
+  if (!isRecord(v)) {
+    return fail()
+  }
+  return {
+    x: number(v.x, -10, 10),
+    y: number(v.y, -10, 10),
+    scale: number(v.scale, 0.01, 100),
+    applied: bool(v.applied),
+  }
+}
+function parseAdjustments(v: unknown) {
+  if (!isRecord(v)) {
+    return fail()
+  }
+  const parsed: Adjustments = {}
+  for (const key of adjustmentKeys) {
+    if (v[key] !== undefined) {
+      parsed[key] = number(v[key], -1, 1)
+    }
+  }
+  return normalizeAdjustments(parsed)
 }
 
 function evidence(v: unknown): GenerationEvidence | undefined {

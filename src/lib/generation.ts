@@ -2,13 +2,12 @@ import type {Rect} from './geometry.ts'
 import type {GenerationEvidence, Job, Layer} from './state.ts'
 
 import {createIngredient, withIngredient, workspaceEpoch} from './actions.ts'
-import {registerOutput} from './alignment/index.ts'
 import {apiKeyStore, getApiKey, hasApiKey, refreshApiStatus, requestApiKey} from './apiKey.ts'
 import {assets} from './assets.ts'
 import {frameHasContent, getUpstreamCanvasSize, renderRegion} from './composite.ts'
 import {createId} from './createId.ts'
 import {createDemoImage} from './demo.ts'
-import {blobToDataUrl, createCanvas, encodeCanvas, getContext, prepareUpstreamImage} from './image.ts'
+import {blobToDataUrl, encodeCanvas, prepareUpstreamImage} from './image.ts'
 import {parseImageResult, readBoundedBody, validateImageRequest} from './imageApi.ts'
 import {emptyAreaThreshold, getGenerationRegion} from './generationRegion.ts'
 import {getModel} from './models/index.ts'
@@ -186,28 +185,12 @@ export async function generate(overrides: GenerationOverrides = {}) {
     }
     const raw = await assets.add(blob)
     releases.push(assets.pin([raw.id]))
-    let output = raw; let aligned = false
     const actualAspect = raw.width / raw.height; const requestedAspect = job.rect.width / job.rect.height
     if (Math.abs(Math.log(actualAspect / requestedAspect)) > 0.02) {
       notify('info', 'The provider returned a different aspect ratio. It is fitted into the captured frame; the raw output remains in the project.')
     }
-    if (editor.alignOutput && rendered && rendered.emptyFraction < 0.5 && !editor.demoMode) {
-      try {
-        const registration = await registerOutput(rendered.canvas, raw.bitmap, requestedAspect)
-        if (registration.applied) {
-          const canvas = createCanvas(raw.width, raw.height); const ctx = getContext(canvas); const p = registration.placement
-          ctx.drawImage(rendered.canvas, 0, 0, canvas.width, canvas.height)
-          ctx.drawImage(raw.bitmap, p.x * canvas.width, p.y * canvas.height, p.scale * canvas.width, p.scale * canvas.height)
-          output = await assets.add(await encodeCanvas(canvas, 'png'))
-          aligned = true
-          notify('info', 'Experimental drift correction was applied. The original output is retained in the request capture.')
-        }
-      } catch {
-        notify('info', 'Drift correction was unavailable. The original result was kept.')
-      }
-    }
     const name = `${editor.demoMode ? 'Demo · ' : ''}${editor.prompt.trim().split('\n')[0].slice(0, 72)}`
-    const ingredient = await createIngredient(output, name, 'generated')
+    const ingredient = await createIngredient(raw, name, 'generated')
     if (!current()) {
       return
     }
@@ -230,7 +213,7 @@ export async function generate(overrides: GenerationOverrides = {}) {
     const layer: Layer = {
       ...defaultGeneratedMask,
       id: createId(),
-      assetId: output.id,
+      assetId: raw.id,
       kind: 'generated',
       name,
       rect: job.rect,
@@ -238,7 +221,6 @@ export async function generate(overrides: GenerationOverrides = {}) {
       createdAt: Date.now(),
       modelId: model.id,
       prompt: editor.prompt,
-      aligned,
       evidence,
     }
     projectStore.commit(state => withIngredient({

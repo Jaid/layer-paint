@@ -22,7 +22,7 @@ export const persistenceStore = new Store({
   error: '',
 })
 export const getPersistedEditorState = (): PersistedEditorState => {
-  const {frame, frameEnabled, layersPanelOpen, modelId, prompt, quality, ratio, resolution, view, exportMode, exportScale, alignOutput, demoMode} = editorStore.state
+  const {frame, frameEnabled, layersPanelOpen, modelId, prompt, quality, ratio, resolution, view, exportMode, exportScale, demoMode} = editorStore.state
   return {
     frame,
     frameEnabled,
@@ -35,7 +35,6 @@ export const getPersistedEditorState = (): PersistedEditorState => {
     view,
     exportMode,
     exportScale,
-    alignOutput,
     demoMode,
   }
 }
@@ -145,9 +144,6 @@ async function restore() {
   }
   if (explicitQueryKeys.has('quality')) {
     editorStore.set({quality: model.normalizeQuality(queryParameters.quality) ?? ''})
-  }
-  if (explicitQueryKeys.has('align')) {
-    editorStore.set({alignOutput: queryParameters.align})
   }
   return true
 }

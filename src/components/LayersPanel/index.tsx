@@ -6,8 +6,11 @@ import {useEffect, useRef, useState} from 'react'
 
 import IconButton from '#component/IconButton'
 import {selectLayer, updateLayer} from '#src/lib/actions.ts'
+import {adjustmentKeys, toGamma} from '#src/lib/adjustments/index.ts'
 import {assets} from '#src/lib/assets.ts'
+import {contentAwareStore, setContentAwareAlignment, supportsContentAwareAlignment} from '#src/lib/contentAware.ts'
 import {openContextMenu} from '#src/lib/contextMenu.ts'
+import {getActiveAlignment} from '#src/lib/layerGeometry.ts'
 import {getMaskAlpha} from '#src/lib/mask.ts'
 import {defaultGeneratedMask, defaultImportedMask, editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
@@ -15,6 +18,31 @@ import {useStore} from '#src/lib/store/index.ts'
 import css from './style.module.sass'
 
 type MaskProperty = 'area' | 'feather' | 'offsetX' | 'offsetY' | 'roundness'
+type AdjustmentKey = typeof adjustmentKeys[number]
+
+const adjustmentLabels: Record<AdjustmentKey, {
+  format?: (value: number) => string
+  label: string
+  title?: string
+}> = {
+  brightness: {label: 'Brightness'},
+  contrast: {label: 'Contrast'},
+  gamma: {
+    label: 'Gamma',
+    title: 'Midtone gamma; higher values lift the midtones',
+    format: value => `γ ${toGamma(value).toFixed(2)}`,
+  },
+  saturation: {label: 'Saturation'},
+  vibrance: {
+    label: 'Vibrance',
+    title: 'Boosts muted colors more than already saturated ones',
+  },
+  temperature: {
+    label: 'White balance',
+    title: 'Cooler (left) or warmer (right)',
+  },
+}
+const formatSigned = (value: number) => `${value > 0 ? '+' : ''}${Math.round(value * 100)}`
 export default function LayersPanel() {
   const layers = useStore(projectStore, state => state.layers); const editor = useStore(editorStore)
   return <section className={clsx(css.panel, editor.layersPanelOpen && css.open)} aria-label='Layers' data-overlay-control data-testid='layers-panel'>
@@ -36,6 +64,34 @@ function MaskSlider({layer, property, label, min = 0, max = 100}: {
 }) {
   const value = layer[property] ?? 0
   return <label className={css.slider}><span>{label}</span><input aria-label={`${label} of ${layer.name}`} max={max} min={min} step={1} type='range' value={Math.round(value * 100)} onChange={event => updateLayer(layer.id, {[property]: Number(event.currentTarget.value) / 100}, {coalesceKey: `${property}:${layer.id}`})} /><output>{Math.round(value * 100)}%</output></label>
+}
+function AdjustmentSlider({layer, property}: {
+  layer: Layer
+  property: AdjustmentKey
+}) {
+  const value = layer.adjustments?.[property] ?? 0
+  const {label, title, format = formatSigned} = adjustmentLabels[property]
+  const set = (next: number) => updateLayer(layer.id, {adjustments: {
+    ...layer.adjustments,
+    [property]: next,
+  }}, {coalesceKey: `${property}:${layer.id}`})
+  return <label className={css.slider} title={title ? `${title} · double-click to reset` : 'Double-click to reset'}><span>{label}</span><input aria-label={`${label} of ${layer.name}`} data-adjustment={property} max={100} min={-100} step={1} type='range' value={Math.round(value * 100)} onChange={event => set(Number(event.currentTarget.value) / 100)} onDoubleClick={() => set(0)} /><output>{format(value)}</output></label>
+}
+function Adjustments({layer}: {layer: Layer}) {
+  return <fieldset className={css.adjustments} data-testid='adjustments'>
+    <legend>Adjustments</legend>
+    {adjustmentKeys.map(key => <AdjustmentSlider key={key} layer={layer} property={key} />)}
+    <button disabled={!layer.adjustments} type='button' onClick={() => updateLayer(layer.id, {adjustments: undefined})}>Reset adjustments</button>
+  </fieldset>
+}
+function ContentAwareToggle({layer}: {layer: Layer}) {
+  const pending = useStore(contentAwareStore, state => state.pending.has(layer.id))
+  const supported = supportsContentAwareAlignment(layer)
+  const unmatched = layer.contentAware && layer.alignment && !layer.alignment.applied
+  return <label className={css.checkbox} title={supported ? 'Registers the output onto the canvas it was generated from, in case the model shifted or zoomed the content. The first activation analyzes the images; later toggles are instant.' : 'Only available for generations that had canvas content in their frame'}>
+    <input aria-busy={pending} checked={Boolean(layer.contentAware)} data-testid='content-aware' disabled={!supported || pending} type='checkbox' onChange={event => void setContentAwareAlignment(layer.id, event.currentTarget.checked)} />
+    Content-aware alignment{pending ? ' · analyzing…' : unmatched ? ' · no drift found' : ''}
+  </label>
 }
 function TransformFields({layer}: {layer: Layer}) {
   const [locked, setLocked] = useState(true)
@@ -116,7 +172,7 @@ function LayerRow({layer, background, selected}: {
             }
           }}
         /> : <button className={css.name} title={`${layer.name} · double-click to rename`} type='button' onClick={chooseImage} onDoubleClick={() => setRenaming(true)}>{layer.name}</button>}
-        <span className={css.subtitle}>{layer.kind === 'generated' ? <><Lock aria-hidden size={10} />generation</> : 'import'}{background && ' · base'}{layer.evidence?.demo && ' · demo'}{layer.aligned && ' · realigned'}</span>
+        <span className={css.subtitle}>{layer.kind === 'generated' ? <><Lock aria-hidden size={10} />generation</> : 'import'}{background && ' · base'}{layer.evidence?.demo && ' · demo'}{getActiveAlignment(layer) && ' · aligned'}{layer.adjustments && ' · adjusted'}</span>
       </div>
       <IconButton icon={layer.visible ? Eye : EyeOff} size={14} title={layer.visible ? 'Hide layer' : 'Show layer'} onClick={() => updateLayer(layer.id, {visible: !layer.visible})} />
     </div>
@@ -144,7 +200,9 @@ function LayerRow({layer, background, selected}: {
         <button className={css.editTransform} aria-pressed={tool === 'image'} type='button' onClick={() => editorStore.set({tool: tool === 'image' ? 'frame' : 'image'})}>{tool === 'image' ? 'Finish transform' : 'Move, resize & rotate'}</button>
         {tool === 'image' && <TransformFields layer={layer} />}
       </>}
+      {layer.kind === 'generated' && !editingMask && <ContentAwareToggle layer={layer} />}
       {layer.kind === 'generated' && <p className={css.note}>Placement is locked to the captured generation frame. {asset ? `${asset.width} × ${asset.height} source pixels.` : ''}</p>}
+      {!editingMask && <Adjustments layer={layer} />}
       {layer.evidence && <details className={css.provenance}><summary>Request capture</summary><p>{new Date(layer.evidence.capturedAt).toLocaleString()}<br />{layer.evidence.modelId}<br />{layer.evidence.ratio} · {layer.evidence.resolution || layer.evidence.quality || 'default'}<br />{layer.evidence.referenceAssetIds.length} reference image(s){layer.evidence.canvasAssetId ? ' + captured canvas' : ''}</p><pre>{layer.evidence.prompt}</pre><p>The exact input and raw output images are retained in the editable project.</p></details>}
     </div>}
   </li>

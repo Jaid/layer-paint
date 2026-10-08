@@ -25,13 +25,22 @@ const getWorker = () => {
         request?.reject(new Error(event.data.error ?? 'Alignment failed'))
       }
     })
+    worker.addEventListener('error', () => {
+      for (const request of pending.values()) {
+        request.reject(new Error('The alignment worker could not start.'))
+      }
+      pending.clear()
+      worker?.terminate()
+      worker = undefined
+    })
   }
   return worker
 }
-const toAnalysisImage = (source: CanvasImageSource & {
+type AnalysisSource = CanvasImageSource & {
   height: number
   width: number
-}, aspect: number): GrayImage => {
+}
+const toAnalysisImage = (source: AnalysisSource, aspect: number): GrayImage => {
   const size = fitWithin({
     width: analysisSide * aspect,
     height: analysisSide,
@@ -52,7 +61,7 @@ export type RegistrationResult = AlignmentResult & {
  * Registers a generated image against the canvas input it was generated from.
  * Both are analyzed with the frame aspect ratio, which is how the generated layer is placed.
  */
-export const registerOutput = async (input: OffscreenCanvas, output: ImageBitmap, aspect: number): Promise<RegistrationResult> => {
+export const registerOutput = async (input: AnalysisSource, output: AnalysisSource, aspect: number): Promise<RegistrationResult> => {
   const request: AlignmentRequest = {
     id: nextId++,
     input: toAnalysisImage(input, aspect),
