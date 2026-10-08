@@ -33,12 +33,25 @@ For a static deployment, the key popover accepts a browser-session key. This key
 
 ## Editing workflow
 
-1. Drop a photo onto the canvas, or choose **Imports → To canvas**. The first layer becomes the unmasked base. Further imports can be moved, resized and rotated.
-2. Drop reference images on the editor, or choose **Imports → To prompt**. Each receives a stable positive reference number. Deleting an ingredient does not renumber the others or reuse its number.
+1. Drop a photo onto the canvas, or right-click the canvas and choose **Import images to canvas…**. The first layer becomes the unmasked base. Further imports can be moved, resized and rotated.
+2. Drop reference images on the editor, or choose **Add images to collection…** from the canvas context menu. Every image in the collection – imports, generations and snapshots alike – receives a stable positive number as soon as it is added. Deleting an item does not renumber the others or reuse its number.
 3. Move the generation frame to the region you want to edit. Corner handles preserve its ratio. Edge handles snap between ratios advertised by the selected model. Handles appear when the pointer touches the frame. While the canvas has no layers, the frame stays in place and dragging inside it pans the view instead.
-4. Write a prompt and choose **Generate**, or press **Ctrl+Enter**. A generation captures its input images, prompt, model settings and frame before the request is sent. Moving the frame while it runs cannot change where the result lands.
+4. Write a prompt and press the yellow button, or press **Ctrl+Enter**. A generation captures its input images, prompt, model settings and frame before the request is sent. Moving the frame while it runs cannot change where the result lands.
 5. Use the docked layer inspector to adjust **Area** and **Feather**. Advanced mask mode hides the generation frame and provides mask translation and roundness. Dragging inside the selected layer repositions its mask.
 6. Continue with further local edits, then use **Export** for PNG, JPG, WebP or a PNG clipboard copy. Use **Save project** for an editable `.layerpaint` backup containing the source assets and request captures.
+
+### The generate button and the frame toggle
+
+The yellow button names what the generation will do with the canvas:
+
+| Label | Situation |
+| --- | --- |
+| **Generate** | The frame does not touch any canvas content. |
+| **Extend** | The frame contains canvas content but also empty canvas. |
+| **Patch** | The frame is filled with canvas content and there is more content outside of it. |
+| **Transform** | The frame is filled with canvas content and nothing lies outside of it. |
+
+The frame icon next to it switches the frame off and on. While it is off, the frame is hidden and every generation spans all visible canvas content, padded to the closest aspect ratio the model supports. Hovering the button previews that area. **Frame it** and **Frame all artwork** switch the frame back on.
 
 ### Prompt references
 
@@ -51,6 +64,14 @@ Please put ![1] onto the head of ![0]
 ```markdown
 The hand should hold a cup of coffee with ![2] printed on it
 ```
+
+A reference can carry a description in parentheses. The description is written into the prompt directly before the image:
+
+```markdown
+Please add ![2](this witch) to the image
+```
+
+is sent as “Please add this witch [Image 2] to the image”. Parentheses inside the description may be nested or escaped with a backslash. Something that looks like an image location – a URL, a path, a file name like `logo.png` or `<…>` – keeps its standard Markdown meaning and is never fetched.
 
 Prompts without an explicit reference work as well, for local edits or global restyling:
 
@@ -68,20 +89,13 @@ Only referenced ingredients are sent. Repeated references share an attachment. M
 
 ### Canvas and layers
 
-The frame and the images have separate geometry. Generated layers remain pinned to their captured frame. To reuse generated pixels as a movable object, add them to the prompt collection and explicitly place a new imported copy onto the canvas.
+The frame and the images have separate geometry. Generated layers remain pinned to their captured frame. To reuse generated pixels as a movable object, drag the generation’s thumbnail from the collection onto the canvas to place a new imported copy.
 
 Use the **Image** tool to drag imports, resize from a corner or rotate from the round handle. The inspector also provides numerical transform fields. Shift snaps rotation to 15-degree increments; Alt resizes around the center.
 
-Right-click the canvas or a layer for **Frame it**, visibility, ordering, deletion, framing and zoom actions. There is no permanent floating canvas toolbar. Double-clicking a layer also frames it.
+Right-click the canvas or a layer for **Frame it**, visibility, ordering, deletion, framing, zoom, import, snapshot and undo/redo actions. There is no permanent floating canvas toolbar. Double-clicking a layer also frames it.
 
-The collection distinguishes four kinds of content:
-
-| Kind | Meaning |
-| --- | --- |
-| Canvas — yellow | Live contents of the current frame; `![0]` |
-| Canvas snapshot — orange | A frozen, reusable frame capture |
-| Import — pink | An imported source, usable on the canvas or in the prompt |
-| Generation — green | Generated pixels, optionally reusable as references |
+The collection below the editor is a masonry grid of thumbnails, each tagged with its number. Click a thumbnail to insert its reference at the cursor, drag it into the editor to insert the reference where you drop it, or drag it onto the canvas to place a movable copy there. The badge color tells the kind apart: pink for imports, green for generations and orange for canvas snapshots (**Snapshot the frame into collection** in the canvas context menu). `![0]` always refers to the live canvas inside the frame and is not part of the collection.
 
 ### Masks and outpainting
 
@@ -112,7 +126,7 @@ The app uses the dedicated OpenRouter Image API:
 - Discovery: `/api/v1/images/models`
 - Generation: `/api/v1/images`
 
-`reference/image-models.json` records the dated capability snapshot. The client and gateway refresh capabilities at runtime and keep the snapshot as an explicit offline fallback. All nine requested canonical model IDs are present in the catalog:
+`reference/image-models.json` records the dated capability snapshot. The client and gateway refresh capabilities at runtime and keep the snapshot as an explicit offline fallback. All nine requested canonical model IDs are present in the catalog. Nano Banana 2.1 is the default:
 
 ```text
 google/gemini-3.1-flash-lite-image
@@ -137,7 +151,7 @@ The gateway validates model capabilities and embedded PNG/JPEG/WebP references, 
 | Generate | Ctrl+Enter / Cmd+Enter |
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z; Cmd equivalents |
 | Frame / Image / Mask tool | V / I / M |
-| Show frame / all artwork | F / Shift+F |
+| Show frame (or generation area while the frame is off) / all artwork | F / Shift+F |
 | Pan | Space+drag or middle-button drag |
 | Zoom | Wheel; + / − |
 | Pan with wheel | Shift+wheel, or horizontal trackpad scrolling |
