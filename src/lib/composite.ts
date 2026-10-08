@@ -6,10 +6,13 @@ import {assets} from './assets.ts'
 import {rectIntersection, rectUnion} from './geometry.ts'
 import {createCanvas, getContext} from './image.ts'
 import {getActiveAlignment, getContentRect, getLayerBounds, worldToLayer} from './layerGeometry.ts'
-import {clipMask, getSoftMask, isMaskActive, maskDistance} from './mask.ts'
+import {getFeatherMethod} from './feather/index.ts'
+import {clipMask, createAlphaCanvas, getFeatherField, getSoftMask, isMaskActive, maskDistance} from './mask.ts'
 
 export type RenderRegionOptions = {
   background?: string
+  /** whether feather methods may adapt to the artwork below a layer; nested coverage renders turn this off */
+  coverageAware?: boolean
   layers: ReadonlyArray<Layer>
   measureEmpty?: boolean
   region: Rect
@@ -34,6 +37,84 @@ const measureEmptyFraction = (canvas: OffscreenCanvas) => {
     empty += data[i] < 250 ? 1 : 0
   }
   return empty / (probe.width * probe.height)
+}
+
+/** Mask resolutions snap to a few steps, so zooming does not recompute feather masks on every frame. */
+const maskResolutions = [64, 96, 128, 192, 256, 384, 512, 768, 1024]
+const getMaskResolution = (pixels: number) => maskResolutions.find(resolution => resolution >= pixels) ?? maskResolutions.at(-1)!
+
+type SeamMaskEntry = {
+  below: ReadonlyArray<Layer>
+  canvas: OffscreenCanvas
+  loaded: string
+}
+/** per layer and resolution, so the viewport, coverage probes and exports do not evict each other */
+const seamMaskCache = new WeakMap<Layer, Map<string, SeamMaskEntry>>
+
+/**
+ * The feather ramp of a layer, adapted to where the artwork below it ends.
+ *
+ * Coverage is rendered in the layer’s own frame from the layers below, independent of the requested region, so the viewport, generation inputs and exports agree.
+ */
+function getSeamAwareMask(layers: ReadonlyArray<Layer>, index: number, resolution: number) {
+  const layer = layers[index]
+  const below = layers.slice(0, index)
+  const method = getFeatherMethod()
+  const key = `${method.id}:${resolution}`
+  const loaded = below.map(item => Number(assets.has(item.assetId))).join('')
+  let entries = seamMaskCache.get(layer)
+  if (!entries) {
+    entries = new Map
+    seamMaskCache.set(layer, entries)
+  }
+  const cached = entries.get(key)
+  if (cached?.loaded === loaded && cached.below.length === below.length && cached.below.every((item, i) => item === below[i])) {
+    return cached.canvas
+  }
+  const field = getFeatherField(layer, layer.rect, resolution, method)
+  const bounds = getLayerBounds(layer)
+  const density = Math.max(field.width / layer.rect.width, field.height / layer.rect.height)
+  const {canvas: coverage} = renderRegion({
+    layers: below,
+    region: bounds,
+    size: {
+      width: Math.max(1, Math.ceil(bounds.width * density)),
+      height: Math.max(1, Math.ceil(bounds.height * density)),
+    },
+    measureEmpty: false,
+    coverageAware: false,
+  })
+  // grid pixel → layer-local → world → coverage pixel
+  const gridToCoverage = new DOMMatrix()
+    .scale(coverage.width / bounds.width, coverage.height / bounds.height)
+    .translate(-bounds.x, -bounds.y)
+    .translate(layer.rect.x + layer.rect.width / 2, layer.rect.y + layer.rect.height / 2)
+    .rotate(layer.rotation ?? 0)
+    .translate(-layer.rect.width / 2, -layer.rect.height / 2)
+    .scale(layer.rect.width / field.width, layer.rect.height / field.height)
+  const sampled = createCanvas(field.width, field.height); const sample = getContext(sampled)
+  sample.setTransform(gridToCoverage.inverse())
+  sample.drawImage(coverage, 0, 0)
+  const {data} = sample.getImageData(0, 0, field.width, field.height)
+  const uncovered = new Uint8Array(field.depth.length)
+  let seams = false
+  for (const [i, depth] of field.depth.entries()) {
+    if (!Number.isNaN(depth) && data[i * 4 + 3] < 128) {
+      uncovered[i] = 1
+      seams = true
+    }
+  }
+  const canvas = seams ? createAlphaCanvas(method.getOverlapAlpha(field.depth, uncovered, field.width, field.height, field.transition), field) : getSoftMask(layer, layer.rect, resolution, method)
+  entries.delete(key)
+  entries.set(key, {
+    below,
+    canvas,
+    loaded,
+  })
+  while (entries.size > 3) {
+    entries.delete(entries.keys().next().value!)
+  }
+  return canvas
 }
 
 /** One path for the viewport, request crops, exports, clipboard and snapshots. */
@@ -90,8 +171,9 @@ export function renderRegion(options: RenderRegionOptions): RenderedRegion {
       reduce.save()
       reduce.globalCompositeOperation = 'destination-out'
       transform(reduce, layer)
-      const resolution = Math.min(1024, Math.max(64, Math.ceil(Math.max(layer.rect.width * sx, layer.rect.height * sy))))
-      const soft = getSoftMask(layer, layer.rect, resolution)
+      const resolution = getMaskResolution(Math.ceil(Math.max(layer.rect.width * sx, layer.rect.height * sy)))
+      const method = getFeatherMethod()
+      const soft = options.coverageAware !== false && method.coverageAware && !layer.featherAllEdges ? getSeamAwareMask(options.layers, index, resolution) : getSoftMask(layer, layer.rect, resolution, method)
       reduce.drawImage(soft, 0, 0, layer.rect.width, layer.rect.height)
       reduce.restore()
       target.save()
