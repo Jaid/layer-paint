@@ -426,6 +426,40 @@ try {
     assert.deepEqual(pixels.base, [0, 0, 255, 255]); assert.equal(pixels.overlap[3], 255); assert.ok(pixels.overlap[2] > 200); assert.deepEqual(pixels.outside, [255, 0, 0, 255])
   })
 
+  await check('?feather_method selects the feather; smooth hides where the artwork below ends', async () => {
+    const measureSeam = async (method?: string) => {
+      const target = await browser.newPage()
+      await wire(target)
+      await target.goto(`${appOrigin}/?debug=true${method ? `&feather_method=${method}` : ''}`, {waitUntil: 'networkidle0'})
+      await target.waitForFunction(() => Boolean(globalThis.layerPaint?.persistenceStore.state.hydrated), {timeout: 30000})
+      const result = await target.evaluate(async () => {
+        const h = globalThis.layerPaint!
+        const make = async (color: string) => {const c = new OffscreenCanvas(64, 64); const ctx = c.getContext('2d')!; ctx.fillStyle = color; ctx.fillRect(0, 0, 64, 64); return h.assets.add(await c.convertToBlob({type: 'image/png'}))}
+        const blue = await make('#0000ff'), red = await make('#ff0000')
+        const base = {id: 'seam-base', assetId: blue.id, name: 'Blue', kind: 'import' as const, createdAt: 0, visible: true, area: 1, feather: 0, rect: {x: 0, y: 0, width: 300, height: 300}}
+        // an outpainting that overlaps the corner of the base: the base’s right and bottom edges run through its feather band
+        const edit = {...base, id: 'seam-edit', assetId: red.id, kind: 'generated' as const, feather: 0.6, rect: {x: 150, y: 120, width: 300, height: 300}}
+        const {canvas} = h.renderRegion({layers: [base, edit], region: {x: 0, y: 0, width: 450, height: 420}, size: {width: 450, height: 420}, measureEmpty: false})
+        const {data} = canvas.getContext('2d')!.getImageData(0, 0, 450, 420)
+        const red8 = (x: number, y: number) => data[(y * 450 + x) * 4]
+        let seam = 0
+        for (let y = 125; y < 290; y++) seam = Math.max(seam, Math.abs(red8(299, y) - red8(300, y)))
+        for (let x = 155; x < 290; x++) seam = Math.max(seam, Math.abs(red8(x, 299) - red8(x, 300)))
+        return {seam, blendedEdge: red8(160, 200), exposed: [...data.subarray((410 * 450 + 440) * 4, (410 * 450 + 440) * 4 + 4)]}
+      })
+      await target.close()
+      return result
+    }
+    const smooth = await measureSeam(), distance = await measureSeam('distance')
+    console.log(`  largest step across the underlying edge · smooth ${smooth.seam} · distance ${distance.seam}`)
+    assert.ok(distance.seam > 200, 'The original method shows the underlying edge as a hard line.')
+    assert.ok(smooth.seam < 24, 'The smooth method must not show the underlying edge as a hard line.')
+    for (const result of [smooth, distance]) {
+      assert.ok(result.blendedEdge < 30, 'The layer edge over artwork stays blended.')
+      assert.deepEqual(result.exposed, [255, 0, 0, 255])
+    }
+  })
+
   await check('Native-detail export keeps a tiny high-density patch; all raster encodings decode', async () => {
     const result = await page.evaluate(async () => {
       const h = globalThis.layerPaint!
