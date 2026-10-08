@@ -389,7 +389,6 @@ export default function Viewport() {
     {jobs.map(job => <JobOverlay key={job.id} job={job} rect={toScreenRect(view, job.rect)} />)}
     {tool !== 'mask' && <div className={clsx(css.frame, handles && css.handlesVisible, editor.generationHover && css.charged, dragKind?.startsWith('frame') && css.activeFrame)} data-testid='frame' style={rectStyle(frameScreen)}>
       <div className={css.frameLabel}><span>{editor.ratio}</span><span>{Math.round(frame.width)} × {Math.round(frame.height)}</span></div>
-      {layers.length === 0 && jobs.length === 0 && <div className={css.emptyHint}><strong>A canvas for possibilities</strong><span>Drop an image, generate a starting point, or explore Demo mode.</span></div>}
       {tool === 'frame' && <>
         {corners.map(corner => <div key={corner} className={clsx(css.handle, css[corner])} data-corner={corner} title='Resize frame; aspect ratio stays locked' />)}
         {(['n', 'e', 's', 'w'] as const).map(edge => <div key={edge} className={clsx(css.edgeHandle, css[edge])} data-edge={edge} title='Drag to snap between model-supported aspect ratios' />)}
