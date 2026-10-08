@@ -256,7 +256,6 @@ export const importLayers = async (files: ReadonlyArray<File>, worldPoint?: Poin
         createdAt: Date.now(),
       }
       addLayer(layer, ingredient)
-      selectLayer(layer.id)
       if (isFirst) {
         fitFrameToRect(rect)
         fitViewToRect(editorStore.state.frame)

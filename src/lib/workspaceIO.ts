@@ -1,14 +1,14 @@
 import type {Point} from './geometry.ts'
 import type {Ingredient} from './state.ts'
 
-import {addLayer, createIngredient, fitFrameToRect, getPlacementRect, resetProject, selectLayer, withIngredient, workspaceEpoch} from './actions.ts'
+import {addLayer, createIngredient, fitFrameToRect, getPlacementRect, resetProject, withIngredient, workspaceEpoch} from './actions.ts'
 import {assets} from './assets.ts'
 import {flushAutosave, resumeAutosave} from './autosave.ts'
 import {renderRegion} from './composite.ts'
 import {createId} from './createId.ts'
 import {getExportPlan} from './exporting.ts'
 import {encodeCanvas} from './image.ts'
-import {editorStore, projectStore} from './state.ts'
+import {defaultImportedMask, editorStore, projectStore} from './state.ts'
 
 export {openPortableProject, savePortableProject, serializeProject} from './portableProject.ts'
 
@@ -58,22 +58,19 @@ export async function captureCanvasSnapshot() {
 /** Places a movable copy of a collection image onto the canvas, centered on the given world point or the frame. */
 export function placeIngredient(ingredient: Ingredient, worldPoint?: Point) {
   const asset = assets.require(ingredient.assetId); const isFirst = !projectStore.state.layers.length
-  const rect = getPlacementRect(asset, worldPoint); const id = createId()
+  const rect = getPlacementRect(asset, worldPoint)
   addLayer({
-    id,
+    id: createId(),
     assetId: asset.id,
     kind: 'import',
     name: ingredient.name,
     createdAt: Date.now(),
     visible: true,
-    area: 1,
-    feather: 0,
+    ...defaultImportedMask,
     rotation: 0,
     rect,
   })
-  selectLayer(id)
   if (isFirst) {
     fitFrameToRect(rect)
   }
-  editorStore.set({tool: 'image'})
 }
