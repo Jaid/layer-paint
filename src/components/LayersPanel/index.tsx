@@ -1,11 +1,11 @@
 import type {Layer} from '#src/lib/state.ts'
 
 import clsx from 'clsx'
-import {ChevronDown, Eye, EyeOff, Layers, Lock, MoreHorizontal, Redo2, Undo2} from 'lucide-react'
+import {ChevronDown, Eye, EyeOff, Layers, Lock, MoreHorizontal} from 'lucide-react'
 import {useState} from 'react'
 
 import IconButton from '#component/IconButton'
-import {redo, selectLayer, undo, updateLayer} from '#src/lib/actions.ts'
+import {selectLayer, updateLayer} from '#src/lib/actions.ts'
 import {assets} from '#src/lib/assets.ts'
 import {openContextMenu} from '#src/lib/contextMenu.ts'
 import {editorStore, projectStore} from '#src/lib/state.ts'
@@ -15,16 +15,14 @@ import css from './style.module.sass'
 
 type MaskProperty = 'area' | 'feather' | 'offsetX' | 'offsetY' | 'roundness'
 export default function LayersPanel() {
-  const layers = useStore(projectStore, state => state.layers); const editor = useStore(editorStore); const history = useStore(projectStore.meta)
+  const layers = useStore(projectStore, state => state.layers); const editor = useStore(editorStore)
   return <section className={clsx(css.panel, editor.layersPanelOpen && css.open)} aria-label='Layers' data-overlay-control data-testid='layers-panel'>
     <button className={css.header} aria-expanded={editor.layersPanelOpen} type='button' onClick={() => editorStore.set({layersPanelOpen: !editor.layersPanelOpen})}><Layers size={14} /><span>Layers</span><span className={css.count}>{layers.length}</span><ChevronDown className={css.chevron} size={14} /></button>
     {editor.layersPanelOpen && <>
-      <div className={css.modeButtons} aria-label='Canvas tool' role='group'>{(['frame', 'image', 'mask'] as const).map(tool => <button key={tool} aria-pressed={editor.tool === tool} disabled={tool === 'mask' && (!editor.selectedLayerId || layers[0]?.id === editor.selectedLayerId)} type='button' onClick={() => editorStore.set({tool})}>{tool === 'frame' ? 'Frame' : (tool === 'image' ? 'Image' : 'Mask')}</button>)}</div>
       <ol className={css.list}>{layers.map((layer, index) => ({
         layer,
         index,
       })).toReversed().map(({layer, index}) => <LayerRow key={layer.id} background={index === 0} layer={layer} selected={layer.id === editor.selectedLayerId} />)}</ol>
-      <footer className={css.footer}><IconButton disabled={!history.canUndo} icon={Undo2} title='Undo (Ctrl+Z)' onClick={undo} /><IconButton disabled={!history.canRedo} icon={Redo2} title='Redo (Ctrl+Shift+Z)' onClick={redo} /></footer>
     </>}
   </section>
 }

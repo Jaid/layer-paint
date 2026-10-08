@@ -111,7 +111,8 @@ class CatalogImageModel extends ImageModel {
   }
 }
 export const models: ReadonlyArray<ImageModel> = requestedModelIds.map((id, i) => new CatalogImageModel(id, titles[i]))
-export const defaultModel = models[0]
+export const defaultModelId = 'google/gemini-nano-banana-2.1'
+export const defaultModel = models.find(model => model.id === defaultModelId) ?? models[0]
 export const findModel = (id: unknown) => (typeof id === 'string' ? models.find(model => model.id === id.trim() || model.shortId === id.trim()) : undefined)
 export const getModel = (id: unknown): ImageModel => findModel(id) ?? defaultModel
 export function applyImageCatalog(value: unknown) {

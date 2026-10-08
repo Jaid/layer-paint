@@ -2,9 +2,8 @@
   display: flex
   flex-wrap: wrap
   align-items: center
-  gap: 5px
-  padding: 8px 12px
-  border-bottom: 1px solid var(--border)
+  gap: 4px
+  min-width: 0
   button, select
     padding: 5px 8px
     min-height: 29px
@@ -14,7 +13,6 @@
     color: inherit
     font-size: 11px
   select
-    margin-left: auto
     max-width: 84px
 
 .dialog
@@ -39,8 +37,6 @@
 
 @media (max-width: 1000px) and (max-height: 700px)
   .bar
-    padding: 4px 8px
-    gap: 4px
     button, select
       min-height: 26px
       padding: 4px 6px

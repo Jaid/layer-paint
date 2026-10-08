@@ -1,7 +1,7 @@
 import type {Rect} from './geometry.ts'
 import type {GenerationEvidence, Job, Layer} from './state.ts'
 
-import {selectLayer, workspaceEpoch} from './actions.ts'
+import {createIngredient, selectLayer, withIngredient, workspaceEpoch} from './actions.ts'
 import {registerOutput} from './alignment/index.ts'
 import {apiKeyStore, getApiKey, hasApiKey, refreshApiStatus, requestApiKey} from './apiKey.ts'
 import {assets} from './assets.ts'
@@ -10,9 +10,11 @@ import {createId} from './createId.ts'
 import {createDemoImage} from './demo.ts'
 import {blobToDataUrl, createCanvas, encodeCanvas, getContext, prepareUpstreamImage} from './image.ts'
 import {parseImageResult, readBoundedBody, validateImageRequest} from './imageApi.ts'
+import {emptyAreaThreshold, getGenerationRegion} from './generationRegion.ts'
 import {getModel} from './models/index.ts'
 import {getErrorMessage, notify} from './notices.ts'
 import {compilePrompt, findReferences} from './prompt.ts'
+import {closestRatio} from './ratio.ts'
 import {defaultGeneratedMask, editorStore, projectStore} from './state.ts'
 
 export const emptyCanvasColor = '#808080'
@@ -27,17 +29,25 @@ export const renderFrameInput = (frame: Rect = editorStore.state.frame, maxSide?
   size: getUpstreamCanvasSize(frame, maxSide, maxSide === undefined ? undefined : Math.min(1024, maxSide)),
 })
 export function prepareGeneration(overrides: GenerationOverrides = {}) {
+  const document = projectStore.state; const model = getModel(editorStore.state.modelId)
+  // An explicit frame (a retry) keeps its geometry; otherwise the frame, or all artwork while the frame is off, decides.
+  const region = overrides.frame ? {
+    frame: overrides.frame,
+    ratio: closestRatio(overrides.frame.width / overrides.frame.height, model.aspectRatios),
+  } : getGenerationRegion(editorStore.state, document.layers)
   const editor = {
     ...editorStore.state,
     ...overrides,
-  }; const document = projectStore.state; const model = getModel(editor.modelId)
+    frame: {...region.frame},
+    ratio: region.ratio,
+  }
   const mightHaveContent = frameHasContent(document.layers, editor.frame)
   const sample = mightHaveContent || findReferences(editor.prompt).some(token => token.index === 0) ? renderFrameInput(editor.frame) : undefined
   const hasCanvasContent = mightHaveContent && sample !== undefined && sample.emptyFraction < 1
   const compiled = compilePrompt({
     text: editor.prompt,
     hasCanvasContent,
-    canvasHasEmptyAreas: Boolean(sample && sample.emptyFraction > 0.004),
+    canvasHasEmptyAreas: Boolean(sample && sample.emptyFraction > emptyAreaThreshold),
     ingredientIndices: document.ingredients.map(item => item.index),
     maxReferences: model.maxReferences,
   })
@@ -196,6 +206,8 @@ export async function generate(overrides: GenerationOverrides = {}) {
         notify('info', 'Drift correction was unavailable. The original result was kept.')
       }
     }
+    const name = `${editor.demoMode ? 'Demo · ' : ''}${editor.prompt.trim().split('\n')[0].slice(0, 72)}`
+    const ingredient = await createIngredient(output, name, 'generated')
     if (!current()) {
       return
     }
@@ -220,7 +232,7 @@ export async function generate(overrides: GenerationOverrides = {}) {
       id: createId(),
       assetId: output.id,
       kind: 'generated',
-      name: `${editor.demoMode ? 'Demo · ' : ''}${editor.prompt.trim().split('\n')[0].slice(0, 72)}`,
+      name,
       rect: job.rect,
       visible: true,
       createdAt: Date.now(),
@@ -229,10 +241,10 @@ export async function generate(overrides: GenerationOverrides = {}) {
       aligned,
       evidence,
     }
-    projectStore.commit(state => ({
+    projectStore.commit(state => withIngredient({
       ...state,
       layers: [...state.layers, layer],
-    }))
+    }, ingredient))
     editorStore.set(state => ({
       ...state,
       jobs: state.jobs.filter(item => item.id !== job.id),

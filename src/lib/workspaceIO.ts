@@ -1,12 +1,13 @@
+import type {Point} from './geometry.ts'
 import type {Ingredient} from './state.ts'
 
-import {addLayer, getNextIngredientIndex, resetProject, selectLayer, workspaceEpoch} from './actions.ts'
+import {addLayer, createIngredient, fitFrameToRect, getPlacementRect, resetProject, selectLayer, withIngredient, workspaceEpoch} from './actions.ts'
 import {assets} from './assets.ts'
 import {flushAutosave, resumeAutosave} from './autosave.ts'
 import {renderRegion} from './composite.ts'
 import {createId} from './createId.ts'
 import {getExportPlan} from './exporting.ts'
-import {createThumbnailDataUrl, encodeCanvas} from './image.ts'
+import {encodeCanvas} from './image.ts'
 import {editorStore, projectStore} from './state.ts'
 
 export {openPortableProject, savePortableProject, serializeProject} from './portableProject.ts'
@@ -22,25 +23,12 @@ export async function referenceAsset(assetId: string, name: string, kind: Ingred
   if (existing) {
     return existing
   }
-  const asset = assets.require(assetId)
-  const ingredient: Ingredient = {
-    id: createId(),
-    index: getNextIngredientIndex(projectStore.state.ingredients),
-    assetId,
-    name,
-    kind,
-    thumbnail: await createThumbnailDataUrl(asset.bitmap),
-    createdAt: Date.now(),
-  }
+  const ingredient = await createIngredient(assets.require(assetId), name, kind ?? 'import')
   if (epoch !== workspaceEpoch) {
     throw new Error('The workspace changed while the reference was being prepared.')
   }
-  projectStore.commit(document => ({
-    ...document,
-    nextIngredientIndex: Math.max(document.nextIngredientIndex ?? 1, ingredient.index + 1),
-    ingredients: [...document.ingredients, ingredient],
-  }))
-  return ingredient
+  projectStore.commit(document => withIngredient(document, ingredient))
+  return projectStore.state.ingredients.find(item => item.assetId === assetId) ?? ingredient
 }
 export async function captureCanvasSnapshot() {
   const epoch = workspaceEpoch
@@ -67,10 +55,10 @@ export async function captureCanvasSnapshot() {
     minute: '2-digit',
   })}`, 'snapshot')
 }
-export function placeIngredient(ingredient: Ingredient) {
-  const asset = assets.require(ingredient.assetId); const frame = editorStore.state.frame
-  const scale = Math.min(1, frame.width / asset.width, frame.height / asset.height)
-  const width = asset.width * scale; const height = asset.height * scale; const id = createId()
+/** Places a movable copy of a collection image onto the canvas, centered on the given world point or the frame. */
+export function placeIngredient(ingredient: Ingredient, worldPoint?: Point) {
+  const asset = assets.require(ingredient.assetId); const isFirst = !projectStore.state.layers.length
+  const rect = getPlacementRect(asset, worldPoint); const id = createId()
   addLayer({
     id,
     assetId: asset.id,
@@ -81,13 +69,11 @@ export function placeIngredient(ingredient: Ingredient) {
     area: 1,
     feather: 0,
     rotation: 0,
-    rect: {
-      x: frame.x + (frame.width - width) / 2,
-      y: frame.y + (frame.height - height) / 2,
-      width,
-      height,
-    },
+    rect,
   })
   selectLayer(id)
+  if (isFirst) {
+    fitFrameToRect(rect)
+  }
   editorStore.set({tool: 'image'})
 }

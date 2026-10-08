@@ -1,13 +1,14 @@
 import type {Point, Rect} from '#src/lib/geometry.ts'
 import type {Corner, FrameEdge, SnapGuides, SnapTargets} from '#src/lib/interaction.ts'
 import type {Layer, View} from '#src/lib/state.ts'
-import type {PointerEvent as ReactPointerEvent} from 'react'
+import type {DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent} from 'react'
 
 import clsx from 'clsx'
 import {useEffect, useRef, useState} from 'react'
 
 import JobOverlay from '#component/JobOverlay'
 import {fitFrameToRect, selectLayer, setFrame, updateLayer} from '#src/lib/actions.ts'
+import {getDroppedIngredient, isIngredientDrag} from '#src/lib/collectionDrag.ts'
 import {findLayerAt, renderRegion} from '#src/lib/composite.ts'
 import {openContextMenu} from '#src/lib/contextMenu.ts'
 import {rectCenter, rectContains, rectFromCenter} from '#src/lib/geometry.ts'
@@ -15,10 +16,12 @@ import {corners, getSnapTargets, moveRectWithSnapping, resizeFrameFromEdge, resi
 import {getLayerBounds, layerToWorld, worldToLayer} from '#src/lib/layerGeometry.ts'
 import {getMaskMetrics} from '#src/lib/mask.ts'
 import {getModel} from '#src/lib/models/index.ts'
+import {getContentRegion} from '#src/lib/generationRegion.ts'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
 import {editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
 import {screenToWorld, setViewportSize, worldToScreen, zoomView} from '#src/lib/viewport.ts'
+import {placeIngredient} from '#src/lib/workspaceIO.ts'
 
 import css from './style.module.sass'
 
@@ -208,15 +211,15 @@ export default function Viewport() {
     }
     const corner = target.closest<HTMLElement>('[data-corner]')?.dataset.corner as Corner | undefined
     const edge = target.closest<HTMLElement>('[data-edge]')?.dataset.edge as FrameEdge | undefined
-    if (state.tool === 'frame' && corner) {
+    if (state.tool === 'frame' && state.frameEnabled && corner) {
       begin(event, 'frame-resize', undefined, corner); return
     }
-    if (state.tool === 'frame' && edge) {
+    if (state.tool === 'frame' && state.frameEnabled && edge) {
       begin(event, 'frame-edge', undefined, undefined, edge); return
     }
     const hit = findLayerAt(projectStore.state.layers, world)
     // With no artwork there is nothing to frame, so a press inside the frame pans instead of moving it.
-    if (state.tool !== 'frame' || event.ctrlKey || event.metaKey || event.altKey || !projectStore.state.layers.length || !rectContains(state.frame, world)) {
+    if (state.tool !== 'frame' || !state.frameEnabled || event.ctrlKey || event.metaKey || event.altKey || !projectStore.state.layers.length || !rectContains(state.frame, world)) {
       selectLayer(hit?.id ?? null)
       if (hit?.kind === 'import' && state.tool !== 'mask') {
         begin(event, 'image-move', hit); return
@@ -229,6 +232,9 @@ export default function Viewport() {
     const point = pointOf(event); const state = editorStore.state; const world = screenToWorld(state.view, point); const active = drag.current
     if (!active) {
       const frame = toScreenRect(state.view, state.frame); const distance = 14
+      if (!state.frameEnabled) {
+        setFrameTouched(false)
+      }
       const expanded = {
         x: frame.x - distance,
         y: frame.y - distance,
@@ -236,7 +242,7 @@ export default function Viewport() {
         height: frame.height + distance * 2,
       }
       const near = rectContains(expanded, point) && (Math.min(Math.abs(point.x - frame.x), Math.abs(point.x - frame.x - frame.width)) <= distance || Math.min(Math.abs(point.y - frame.y), Math.abs(point.y - frame.y - frame.height)) <= distance)
-      setFrameTouched(near)
+      setFrameTouched(near && state.frameEnabled)
       const hit = findLayerAt(projectStore.state.layers, world)
       if (state.hoveredLayerId !== (hit?.id ?? null)) {
         editorStore.set({hoveredLayerId: hit?.id ?? null})
@@ -352,7 +358,24 @@ export default function Viewport() {
       ref.current.releasePointerCapture(event.pointerId)
     }
   }
-  const {view, frame, tool, selectedLayerId, hoveredLayerId, jobs} = editor
+  const dropIngredient = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isIngredientDrag(event.dataTransfer)) {
+      return
+    }
+    event.preventDefault(); event.stopPropagation()
+    const ingredient = getDroppedIngredient(event.dataTransfer)
+    if (!ingredient) {
+      return
+    }
+    try {
+      placeIngredient(ingredient, screenToWorld(editorStore.state.view, pointOf(event)))
+    } catch (error) {
+      notify('error', getErrorMessage(error))
+    }
+  }
+  const {view, frame, frameEnabled, tool, selectedLayerId, hoveredLayerId, jobs} = editor
+  // While the frame is off, hovering Generate previews the region that spans all artwork.
+  const contentRegion = !frameEnabled && editor.generationHover ? getContentRegion(layers, getModel(editor.modelId).aspectRatios) : undefined
   const selected = layers.find(layer => layer.id === selectedLayerId)
   const outlined = layers.filter(layer => layer.visible && (layer.id === selectedLayerId || layer.id === hoveredLayerId))
   const frameScreen = toScreenRect(view, frame)
@@ -364,11 +387,19 @@ export default function Viewport() {
       backgroundSize: `${grid}px ${grid}px`,
       backgroundPosition: `${view.x}px ${view.y}px`,
     }} tabIndex={0} ref={ref}
+    onDragOver={event => {
+      if (isIngredientDrag(event.dataTransfer)) {
+        event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'
+      }
+    }} onDrop={dropIngredient}
     onContextMenu={event => {
-      event.preventDefault(); const hit = findLayerAt(projectStore.state.layers, screenToWorld(editorStore.state.view, pointOf(event))); openContextMenu(event.clientX, event.clientY, hit?.id ?? null)
+      event.preventDefault(); const world = screenToWorld(editorStore.state.view, pointOf(event)); const hit = findLayerAt(projectStore.state.layers, world); openContextMenu(event.clientX, event.clientY, hit?.id ?? null, world)
     }} onDoubleClick={event => {
       const layer = findLayerAt(layers, screenToWorld(editorStore.state.view, pointOf(event))); if (layer) {
-        fitFrameToRect(getLayerBounds(layer)); editorStore.set({tool: 'frame'})
+        fitFrameToRect(getLayerBounds(layer)); editorStore.set({
+          tool: 'frame',
+          frameEnabled: true,
+        })
       }
     }} onKeyDown={event => {
       if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') {
@@ -387,13 +418,13 @@ export default function Viewport() {
     <canvas className={css.scene} aria-hidden data-testid='scene' ref={canvasRef} />
     {outlined.map(layer => <LayerOutline key={layer.id} layer={layer} masked={layers[0]?.id !== layer.id} transform={layer.id === selectedLayerId && layer.kind === 'import' && tool === 'image'} view={view} />)}
     {jobs.map(job => <JobOverlay key={job.id} job={job} rect={toScreenRect(view, job.rect)} />)}
-    {tool !== 'mask' && <div className={clsx(css.frame, handles && css.handlesVisible, editor.generationHover && css.charged, dragKind?.startsWith('frame') && css.activeFrame)} data-testid='frame' style={rectStyle(frameScreen)}>
-      <div className={css.frameLabel}><span>{editor.ratio}</span><span>{Math.round(frame.width)} × {Math.round(frame.height)}</span></div>
+    {tool !== 'mask' && frameEnabled && <div className={clsx(css.frame, handles && css.handlesVisible, editor.generationHover && css.charged, dragKind?.startsWith('frame') && css.activeFrame)} data-testid='frame' style={rectStyle(frameScreen)}>
       {tool === 'frame' && <>
         {corners.map(corner => <div key={corner} className={clsx(css.handle, css[corner])} data-corner={corner} title='Resize frame; aspect ratio stays locked' />)}
         {(['n', 'e', 's', 'w'] as const).map(edge => <div key={edge} className={clsx(css.edgeHandle, css[edge])} data-edge={edge} title='Drag to snap between model-supported aspect ratios' />)}
       </>}
     </div>}
+    {tool !== 'mask' && contentRegion && <div className={clsx(css.frame, css.charged, css.contentRegion)} data-testid='content-region' style={rectStyle(toScreenRect(view, contentRegion.frame))} />}
     {tool === 'mask' && <div className={css.modeHint}>{selected ? 'Mask edit · drag to reposition · Escape to leave' : 'Select a non-background layer to edit its mask'}</div>}
     {guides.x !== undefined && <div
       className={css.guideX} style={{left: worldToScreen(view, {

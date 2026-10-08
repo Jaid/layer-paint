@@ -1,74 +1,95 @@
 import type {Ingredient} from '#src/lib/state.ts'
 
-import {useEffect, useRef, useState} from 'react'
+import {X} from 'lucide-react'
+import {useEffect, useRef, useState, useSyncExternalStore} from 'react'
 
-import {addIngredients, importLayers, removeIngredient} from '#src/lib/actions.ts'
+import {addIngredients, removeIngredient} from '#src/lib/actions.ts'
 import {assets} from '#src/lib/assets.ts'
+import {getReferenceText, startIngredientDrag} from '#src/lib/collectionDrag.ts'
+import {pickImageFiles} from '#src/lib/filePicker.ts'
+import {layoutMasonry} from '#src/lib/masonry.ts'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
 import {insertIntoPrompt} from '#src/lib/promptEditor.ts'
 import {projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
-import {captureCanvasSnapshot, placeIngredient, referenceAsset} from '#src/lib/workspaceIO.ts'
 
 import css from './style.module.sass'
 
+const minColumnWidth = 76
+const gap = 6
+const kindTitles: Record<NonNullable<Ingredient['kind']>, string> = {
+  import: 'import',
+  generated: 'generation',
+  snapshot: 'canvas snapshot',
+}
+
+const useAssetRevision = () => {
+  const revision = useRef(0)
+  return useSyncExternalStore(listener => assets.subscribe(() => {
+    revision.current++; listener()
+  }), () => revision.current, () => 0)
+}
+const getAspect = (ingredient: Ingredient) => {
+  const asset = assets.get(ingredient.assetId)
+  return asset ? Math.min(3, Math.max(1 / 3, asset.height / asset.width)) : 1
+}
+/** The collection: every numbered image as a thumbnail. Click inserts its reference; drag it onto the canvas or into the prompt. */
 export default function Ingredients() {
-  const document = useStore(projectStore); const input = useRef<HTMLInputElement>(null); const canvasInput = useRef<HTMLInputElement>(null)
-  const [expanded, setExpanded] = useState(() => typeof matchMedia !== 'function' || !matchMedia('(max-width: 1000px) and (max-height: 700px)').matches)
+  const ingredients = useStore(projectStore, state => state.ingredients)
+  useAssetRevision()
+  const container = useRef<HTMLElement>(null)
+  const [width, setWidth] = useState(0)
   useEffect(() => {
-    if (typeof matchMedia !== 'function') {
+    if (!container.current || typeof ResizeObserver === 'undefined') {
       return
     }
-    const media = matchMedia('(max-width: 1000px) and (max-height: 700px)')
-    const update = () => setExpanded(!media.matches)
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    observer.observe(container.current)
+    return () => observer.disconnect()
   }, [])
-  const run = async (action: () => unknown) => {
+  const addFiles = async () => {
     try {
-      await action()
+      for (const item of await addIngredients(await pickImageFiles())) {
+        insertIntoPrompt(getReferenceText(item))
+      }
     } catch (error) {
       notify('error', getErrorMessage(error))
     }
   }
-  const chip = (ingredient: Ingredient) => <div key={ingredient.id} className={css.chip} data-kind={ingredient.kind ?? 'import'} data-testid='ingredient'>
-    <button title={`Insert ![${ingredient.index}] · ${ingredient.name}`} type='button' onClick={() => insertIntoPrompt(`![${ingredient.index}]`)}><img alt='' src={ingredient.thumbnail} /><code>![{ingredient.index}]</code><span>{ingredient.name}</span></button>
-    <button aria-label={`Place ${ingredient.name} on canvas`} title='Place a movable copy onto the canvas' type='button' onClick={() => placeIngredient(ingredient)}>↗</button>
-    <button aria-label={`Remove ingredient ${ingredient.index}`} title='Remove reference; existing numbers never change' type='button' onClick={() => removeIngredient(ingredient.id)}>×</button>
-  </div>
-  const snapshots = document.ingredients.filter(item => item.kind === 'snapshot')
-  const imports = document.ingredients.filter(item => !item.kind || item.kind === 'import')
-  const generated = document.ingredients.filter(item => item.kind === 'generated')
-  const referenced = new Set(document.ingredients.map(item => item.assetId))
-  const layerChips = (kind: 'generated' | 'import') => document.layers.filter(layer => layer.kind === kind && !referenced.has(layer.assetId)).map(layer => <button
-    key={layer.id} className={css.layerChip} data-kind={kind} title={`Use ${layer.name} as a prompt reference`} type='button' onClick={() => void run(async () => {
-      const item = await referenceAsset(layer.assetId, layer.name, kind); insertIntoPrompt(`![${item.index}]`)
-    })}
-  >{assets.get(layer.assetId) && <img alt='' src={assets.get(layer.assetId)!.url} />}<span>{layer.name}</span><small>＋ reference</small></button>)
-  return <section className={css.container} aria-label='Image collection' data-testid='ingredients'>
-    <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}><summary>Collection <span>{document.ingredients.length} references · {document.layers.length} layers</span></summary>
-      <div className={css.group} data-kind='canvas'><header><span>Canvas</span><small>live frame content</small></header><div className={css.items}><button className={css.canvasChip} title='Insert the current framed canvas' type='button' onClick={() => insertIntoPrompt('![0]')}><code>![0]</code><span>Live canvas</span></button><button
-        className={css.snapshotButton} disabled={!document.layers.length} title='Freeze current frame as a reusable reference' type='button' onClick={() => void run(async () => {
-          const item = await captureCanvasSnapshot(); insertIntoPrompt(`![${item.index}]`)
-        })}
-      >Take snapshot</button></div></div>
-      {snapshots.length > 0 && <div className={css.group} data-kind='snapshot'><header>Canvas snapshots</header><div className={css.items}>{snapshots.map(chip)}</div></div>}
-      <div className={css.group} data-kind='import'><header><span>Imports</span><div><button type='button' onClick={() => canvasInput.current?.click()}>To canvas</button><button type='button' onClick={() => input.current?.click()}>To prompt</button></div></header><div className={css.items}>{imports.map(chip)}{layerChips('import')}{!imports.length && !document.layers.some(layer => layer.kind === 'import') && <p>Drop images on either side, or add them above.</p>}</div></div>
-      {(generated.length > 0 || document.layers.some(layer => layer.kind === 'generated')) && <div className={css.group} data-kind='generated'><header>Generations</header><div className={css.items}>{generated.map(chip)}{layerChips('generated')}</div></div>}
-    </details>
-    <input
-      accept='image/*,.jxl,.svg' aria-label='Add prompt images' hidden multiple type='file' ref={input} onChange={event => {
-        const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ''; void run(async () => {
-          for (const item of await addIngredients(files)) {
-            insertIntoPrompt(`![${item.index}]`)
-          }
-        })
-      }}
-    />
-    <input
-      accept='image/*,.jxl,.svg' aria-label='Add canvas images' hidden multiple type='file' ref={canvasInput} onChange={event => {
-        const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ''; void run(() => importLayers(files))
-      }}
-    />
+  const columnCount = Math.max(2, Math.floor((width + gap) / (minColumnWidth + gap)))
+  const columns = layoutMasonry(ingredients, columnCount, getAspect, gap / minColumnWidth)
+  return <section className={css.container} aria-label='Image collection' data-testid='ingredients' ref={container}>
+    {ingredients.length ? <div className={css.grid}>
+      {columns.map((column, columnIndex) => <div key={columnIndex} className={css.column}>
+        {column.map(ingredient => <div
+          key={ingredient.id}
+          className={css.tile}
+          data-index={ingredient.index}
+          data-kind={ingredient.kind ?? 'import'}
+          data-testid='ingredient'
+          draggable
+          style={{aspectRatio: `1 / ${getAspect(ingredient)}`}}
+          onDragStart={event => startIngredientDrag(event.dataTransfer, ingredient)}
+        >
+          <button
+            className={css.insert}
+            aria-label={`Insert ${getReferenceText(ingredient)} · ${ingredient.name}`}
+            title={`${getReferenceText(ingredient)} · ${ingredient.name} (${kindTitles[ingredient.kind ?? 'import']})\nClick to reference it in the prompt, or drag it onto the canvas or into the prompt.`}
+            type='button'
+            onClick={() => insertIntoPrompt(getReferenceText(ingredient))}
+          >
+            {ingredient.thumbnail && <img alt='' draggable={false} src={ingredient.thumbnail} />}
+            <span className={css.number}>{ingredient.index}</span>
+          </button>
+          <button
+            className={css.remove}
+            aria-label={`Remove ${getReferenceText(ingredient)} from the collection`}
+            title='Remove from the collection; other numbers never change'
+            type='button'
+            onClick={() => removeIngredient(ingredient.id)}
+          ><X aria-hidden size={11} strokeWidth={2} /></button>
+        </div>)}
+      </div>)}
+    </div> : <button className={css.empty} type='button' onClick={() => void addFiles()}>Drop, paste or choose images for the collection</button>}
   </section>
 }

@@ -1,6 +1,10 @@
 export type ReferenceToken = {
+  /** text from the parentheses in ![2](this witch), placed right before the image in the compiled prompt */
+  description?: string
   end: number
   index: number
+  /** end of the ![2] part, before an optional description */
+  referenceEnd: number
   start: number
 }
 export type PromptSource = {
@@ -49,7 +53,29 @@ const closing = (text: string, start: number, open: string, close: string) => {
   return -1
 }
 
-/** Bare numeric tokens only; escaped tokens, comments, code spans and complete Markdown images stay literal. */
+/** finds the closing parenthesis of a reference description, honoring nested parentheses and backslash escapes */
+const closingDescription = (text: string, start: number) => {
+  let depth = 1
+  for (let index = start + 1; index < text.length; index++) {
+    const char = text[index]
+    if (char === '\\') {
+      index++
+    } else if (char === '(') {
+      depth++
+    } else if (char === ')' && --depth === 0) {
+      return index
+    }
+  }
+  return -1
+}
+/** Standard Markdown image destinations like ![2](https://…), ![2](</a.png>) or ![2](logo.png "title") stay literal Markdown instead of becoming descriptions. */
+const looksLikeDestination = (raw: string) => {
+  const first = raw.trim().split(/\s/, 1)[0]
+  return first.startsWith('<') || /^(?:[a-z][\d+.a-z-]*:\S|\.{0,2}\/|#)/i.test(first) || /^[^\s()]+\.(?:avif|gif|jpe?g|jxl|png|svg|webp)$/i.test(first)
+}
+const normalizeDescription = (raw: string) => raw.replaceAll(/\\(.)/g, '$1').replaceAll(/\s+/g, ' ').trim()
+
+/** Numeric tokens like ![2], optionally described like ![2](this witch). Escaped tokens, comments, code spans and other Markdown images stay literal. */
 export function findReferences(text: string): Array<ReferenceToken> {
   const tokens: Array<ReferenceToken> = []
   for (let index = 0; index < text.length; index++) {
@@ -75,18 +101,36 @@ export function findReferences(text: string): Array<ReferenceToken> {
     if (altEnd < 0) {
       continue
     }
+    const label = text.slice(index + 2, altEnd)
+    const numeric = /^\d+$/.test(label)
     const suffix = text[altEnd + 1]
+    if (numeric && suffix === '(') {
+      // The parentheses describe the referenced image. They are prompt text, never a URL to fetch.
+      const end = closingDescription(text, altEnd + 1)
+      const raw = end >= 0 ? text.slice(altEnd + 2, end) : ''
+      if (end >= 0 && !looksLikeDestination(raw)) {
+        const description = normalizeDescription(raw)
+        tokens.push({
+          start: index,
+          end: end + 1,
+          referenceEnd: altEnd + 1,
+          index: Number(label),
+          ...description ? {description} : {},
+        })
+        index = end; continue
+      }
+    }
     if (suffix === '(' || suffix === '[') {
       const end = closing(text, altEnd + 1, suffix, suffix === '(' ? ')' : ']')
       if (end >= 0) {
         index = end; continue
       }
     }
-    const label = text.slice(index + 2, altEnd)
-    if (/^\d+$/.test(label)) {
+    if (numeric) {
       tokens.push({
         start: index,
         end: altEnd + 1,
+        referenceEnd: altEnd + 1,
         index: Number(label),
       })
     }
@@ -133,7 +177,13 @@ export function compilePrompt(options: CompilePromptOptions): CompiledPrompt {
   let offset = 0; let rewritten = ''
   for (const token of tokens) {
     const position = positions.get(token.index)
-    rewritten += text.slice(offset, token.start) + (position === undefined ? text.slice(token.start, token.end) : getImageLabel(position))
+    const label = position === undefined ? undefined : getImageLabel(position)
+    // A description is written out directly before the image it describes: “add this witch [Image 2] to …”.
+    let replacement = text.slice(token.start, token.end)
+    if (label !== undefined) {
+      replacement = token.description ? `${token.description} ${label}` : label
+    }
+    rewritten += text.slice(offset, token.start) + replacement
     offset = token.end
   }
   rewritten += text.slice(offset)

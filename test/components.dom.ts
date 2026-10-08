@@ -40,6 +40,8 @@ describe('components', () => {
     const {container} = await renderComponent('App')
     expect(container.innerHTML.length).toBeGreaterThan(0)
     expect(container.querySelector('[data-testid="frame"]')).not.toBeNull()
+    // The frame carries no text label.
+    expect(container.querySelector('[data-testid="frame"]')?.textContent).toBe('')
     expect(container.querySelector('[data-testid="generate"]')?.textContent).toContain('Generate')
     expect(container.querySelector('[data-testid="layers-panel"]')).not.toBeNull()
   })
@@ -60,9 +62,57 @@ describe('components', () => {
     expect(getModel(editorStore.state.modelId).supportsRatio(editorStore.state.ratio)).toBe(true)
     expect(editorStore.state.ratio).toBe('9:20')
   })
-  test('Ingredients shows the canvas reference', async () => {
+  test('Ingredients shows numbered, draggable thumbnails only', async () => {
+    const {projectStore} = await import('#src/lib/state.ts')
+    const empty = await renderComponent('Ingredients')
+    expect(empty.container.querySelectorAll('[data-testid="ingredient"]')).toHaveLength(0)
+    expect(empty.container.textContent).toContain('collection')
+    cleanup()
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [3, 1, 2].map(index => ({
+        id: `ingredient-${index}`,
+        assetId: `missing-${index}`,
+        index,
+        name: `Image ${index}`,
+        kind: 'import' as const,
+        thumbnail: 'data:image/webp;base64,AAAA',
+        createdAt: 0,
+      })),
+      nextIngredientIndex: 4,
+    }))
     const {container} = await renderComponent('Ingredients')
-    expect(container.textContent).toContain('![0]')
+    const tiles = [...container.querySelectorAll<HTMLElement>('[data-testid="ingredient"]')]
+    expect(tiles).toHaveLength(3)
+    expect(tiles.every(tile => tile.getAttribute('draggable') === 'true')).toBe(true)
+    expect(tiles.map(tile => tile.querySelector('img')?.getAttribute('src'))).toEqual(['data:image/webp;base64,AAAA', 'data:image/webp;base64,AAAA', 'data:image/webp;base64,AAAA'])
+    expect(new Set(tiles.map(tile => tile.dataset.index))).toEqual(new Set(['1', '2', '3']))
+    // Only thumbnails and numbers: no names, groups or section headings.
+    expect(container.textContent).not.toContain('Image 1')
+    expect(container.querySelector('header')).toBeNull()
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [],
+    }))
+  })
+  test('the generate button names what will happen and sits next to the frame toggle', async () => {
+    const {editorStore} = await import('#src/lib/state.ts')
+    const {container} = await renderComponent('PromptPanel')
+    const toggle = container.querySelector<HTMLButtonElement>('[data-testid="frame-toggle"]')!
+    expect(toggle.nextElementSibling?.getAttribute('data-testid')).toBe('generate')
+    expect(container.querySelector('[data-testid="generate"]')?.textContent).toContain('Generate')
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    act(() => toggle.click())
+    expect(editorStore.state.frameEnabled).toBe(false)
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    act(() => toggle.click())
+    expect(editorStore.state.frameEnabled).toBe(true)
+  })
+  test('project actions share the title row', async () => {
+    const {container} = await renderComponent('PromptPanel')
+    const header = container.querySelector('header')!
+    expect(header.querySelector('nav[aria-label="Project actions"]')).not.toBeNull()
+    expect(header.querySelector('h1')).not.toBeNull()
   })
   test('LayersPanel shows mask sliders only for non-background layers', async () => {
     const {projectStore, editorStore, defaultGeneratedMask} = await import('#src/lib/state.ts')
@@ -101,6 +151,10 @@ describe('components', () => {
     })
     const {container} = await renderComponent('LayersPanel')
     expect(container.querySelectorAll('[data-testid="layer-row"]')).toHaveLength(2)
+    // No tool tab row and no undo/redo footer.
+    expect(container.querySelector('[role="group"]')).toBeNull()
+    expect(container.querySelector('footer')).toBeNull()
+    expect(container.textContent).not.toMatch(/Undo|Redo/)
     expect(container.querySelectorAll('input[type="range"]')).toHaveLength(2)
     act(() => editorStore.set({selectedLayerId: 'a'}))
     const second = await renderComponent('LayersPanel')

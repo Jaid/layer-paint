@@ -1,14 +1,15 @@
 import {useEffect, useRef} from 'react'
 
-import {fitFrameToContent, fitFrameToRect, fitViewToContent, fitViewToFrame, moveLayerInStack, redo, removeLayer, selectLayer, undo, updateLayer} from '#src/lib/actions.ts'
+import {addIngredients, fitFrameToContent, fitFrameToRect, fitViewToContent, fitViewToFrame, importLayers, moveLayerInStack, redo, removeLayer, selectLayer, undo, updateLayer} from '#src/lib/actions.ts'
 import {closeContextMenu, contextMenuStore} from '#src/lib/contextMenu.ts'
+import {pickImageFiles} from '#src/lib/filePicker.ts'
 import {getLayerBounds} from '#src/lib/layerGeometry.ts'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
 import {insertIntoPrompt} from '#src/lib/promptEditor.ts'
 import {editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
 import {zoomBy} from '#src/lib/viewport.ts'
-import {referenceAsset} from '#src/lib/workspaceIO.ts'
+import {captureCanvasSnapshot, referenceAsset} from '#src/lib/workspaceIO.ts'
 
 import css from './style.module.sass'
 
@@ -42,7 +43,7 @@ export default function ContextMenu() {
   const button = (label: string, action: () => unknown, disabled = false) => <button disabled={disabled} role='menuitem' type='button' onClick={() => run(action)}>{label}</button>
   return <div
     className={css.menu} aria-label='Canvas context menu' data-overlay-control role='menu' style={{
-      top: Math.max(8, Math.min(menu.y, innerHeight - (layer ? 510 : 320))),
+      top: Math.max(8, Math.min(menu.y, innerHeight - (layer ? 610 : 420))),
       left: Math.max(8, Math.min(menu.x, innerWidth - 252)),
     }} ref={ref} onContextMenu={event => event.preventDefault()} onKeyDown={event => {
       if (event.key === 'Escape') {
@@ -60,7 +61,10 @@ export default function ContextMenu() {
     {layer && <>
       <strong>{layer.name}</strong>
       {button('Frame it', () => {
-        fitFrameToRect(getLayerBounds(layer)); editorStore.set({tool: 'frame'})
+        fitFrameToRect(getLayerBounds(layer)); editorStore.set({
+          tool: 'frame',
+          frameEnabled: true,
+        })
       })}
       {button('Use as prompt reference', async () => {
         const ingredient = await referenceAsset(layer.assetId, layer.name, layer.kind === 'generated' ? 'generated' : 'import'); insertIntoPrompt(`![${ingredient.index}]`)
@@ -78,12 +82,25 @@ export default function ContextMenu() {
       <hr />
     </>}
     {button('Frame all artwork', () => {
-      fitFrameToContent(); editorStore.set({tool: 'frame'})
+      fitFrameToContent(); editorStore.set({
+        tool: 'frame',
+        frameEnabled: true,
+      })
     })}
-    {button('Show the frame · F', fitViewToFrame)}
+    {button(editorStore.state.frameEnabled ? 'Show the frame · F' : 'Show the generation area · F', fitViewToFrame)}
     {button('Show all artwork · Shift+F', fitViewToContent)}
     {button('Zoom in · +', () => zoomBy(1.25))}
     {button('Zoom out · −', () => zoomBy(0.8))}
+    <hr />
+    {button('Import images to canvas…', async () => importLayers(await pickImageFiles(), menu.world ?? undefined))}
+    {button('Add images to collection…', async () => {
+      for (const ingredient of await addIngredients(await pickImageFiles())) {
+        insertIntoPrompt(`![${ingredient.index}]`)
+      }
+    })}
+    {button('Snapshot the frame into collection', async () => {
+      const ingredient = await captureCanvasSnapshot(); insertIntoPrompt(`![${ingredient.index}]`)
+    }, !projectStore.state.layers.some(item => item.visible))}
     <hr />
     {button('Undo · Ctrl+Z', undo, !projectStore.meta.state.canUndo)}
     {button('Redo · Ctrl+Shift+Z', redo, !projectStore.meta.state.canRedo)}

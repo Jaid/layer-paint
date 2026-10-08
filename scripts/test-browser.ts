@@ -61,6 +61,15 @@ async function check(name: string, action: () => Promise<void>) {
   catch (error) {checks.push({name, passed: false, durationMs: Math.round(performance.now() - start)}); await page.screenshot({path: 'out/test/screenshots/failure.png'}).catch(() => {}); throw new Error(name, {cause: error})}
 }
 const chord = async (key: 'a' | 'z' | 'Enter', shift = false) => {await page.keyboard.down('Control'); if (shift) await page.keyboard.down('Shift'); await page.keyboard.press(key); if (shift) await page.keyboard.up('Shift'); await page.keyboard.up('Control')}
+/** Opens the canvas context menu and answers the native file dialog its item opens. */
+async function pickViaMenu(item: string, ...files: string[]) {
+  const canvas = (await (await page.$('[data-viewport]'))!.boundingBox())!
+  await page.mouse.click(canvas.x + 30, canvas.y + canvas.height - 30, {button: 'right'})
+  await page.waitForSelector('[role="menu"]')
+  const [chooser] = await Promise.all([page.waitForFileChooser(), button(item)])
+  await chooser.accept(files.map(file => resolve(file)))
+}
+const generateLabel = () => page.$eval('[data-testid="generate"]', node => node.textContent?.trim())
 const settle = () => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
 
 try {
@@ -96,17 +105,20 @@ try {
   })
 
   await check('PNG imports, SVG reference conversion and actual JXL worker decoding', async () => {
-    await (await page.$('input[aria-label="Add canvas images"]'))!.uploadFile(resolve('test/fixtures/blue.png'))
+    await pickViaMenu('Import images to canvas…', 'test/fixtures/blue.png')
     await page.waitForFunction(() => globalThis.layerPaint?.projectStore.state.layers.length === 1)
-    await (await page.$('input[aria-label="Add prompt images"]'))!.uploadFile(resolve('test/fixtures/red.png'), resolve('test/fixtures/logo.svg'))
-    await page.waitForFunction(() => globalThis.layerPaint?.projectStore.state.ingredients.length === 2)
-    await (await page.$('input[aria-label="Add canvas images"]'))!.uploadFile(resolve('test/fixtures/red.jxl'))
+    await pickViaMenu('Add images to collection…', 'test/fixtures/red.png', 'test/fixtures/logo.svg')
+    await page.waitForFunction(() => globalThis.layerPaint?.projectStore.state.ingredients.length === 3)
+    await pickViaMenu('Import images to canvas…', 'test/fixtures/red.jxl')
     await page.waitForFunction(() => globalThis.layerPaint?.projectStore.state.layers.length === 2)
     const formats = await page.evaluate(() => {
       const h = globalThis.layerPaint!, doc = h.projectStore.state
-      return {jxl: h.assets.require(doc.layers[1].assetId).blob.type, svg: h.assets.require(doc.ingredients[1].assetId).blob.type, ids: doc.ingredients.map(item => item.index)}
+      return {jxl: h.assets.require(doc.layers[1].assetId).blob.type, svg: h.assets.require(doc.ingredients[2].assetId).blob.type, ids: doc.ingredients.map(item => item.index), kinds: doc.ingredients.map(item => item.kind)}
     })
-    assert.equal(formats.jxl, 'image/webp'); assert.equal(formats.svg, 'image/webp'); assert.deepEqual(formats.ids, [1, 2])
+    // Canvas imports are numbered right away, not only once they are referenced.
+    assert.equal(formats.jxl, 'image/webp'); assert.equal(formats.svg, 'image/webp'); assert.deepEqual(formats.ids, [1, 2, 3, 4])
+    assert.equal(await page.$$eval('[data-testid="ingredient"]', nodes => nodes.length), 4)
+    assert.deepEqual((await page.$$eval('[data-testid="ingredient"]', nodes => nodes.map(node => (node as HTMLElement).dataset.index))).toSorted(), ['1', '2', '3', '4'])
   })
 
   const prompt = 'The hand should hold a cup of coffee with ![2] printed on it'
@@ -118,6 +130,48 @@ try {
     await page.waitForFunction(text => globalThis.layerPaint?.editorStore.state.prompt === text, {}, prompt)
     const preview = await page.evaluate(async () => {const result = await globalThis.layerPaint!.previewRequest(); return {sources: result.sources, errors: result.errors}})
     assert.deepEqual(preview.errors, []); assert.deepEqual(preview.sources, [{kind: 'canvas'}, {kind: 'ingredient', index: 2}])
+  })
+
+  await check('Described references put the description directly before the image', async () => {
+    const preview = await page.evaluate(async () => {
+      const h = globalThis.layerPaint!, previous = h.editorStore.state.prompt
+      h.editorStore.set({prompt: 'Please add ![3](this witch) to the image'})
+      const result = await h.previewRequest()
+      h.editorStore.set({prompt: previous})
+      return {sources: result.sources, text: result.text, errors: result.errors}
+    })
+    assert.deepEqual(preview.errors, []); assert.deepEqual(preview.sources, [{kind: 'canvas'}, {kind: 'ingredient', index: 3}])
+    assert.ok(preview.text.includes('Please add this witch [Image 2] to the image'), preview.text)
+    await page.waitForFunction(text => globalThis.layerPaint?.editorStore.state.prompt === text, {}, prompt)
+  })
+
+  await check('Collection thumbnails drag into the prompt and onto the canvas', async () => {
+    const dragTo = (selector: string, point: (rect: DOMRect) => {x: number; y: number}) => page.evaluate((selector, pointSource) => {
+      const tile = document.querySelector<HTMLElement>('[data-testid="ingredient"][data-index="2"]')!, target = document.querySelector<HTMLElement>(selector)!
+      const at = new Function('rect', `return (${pointSource})(rect)`)(target.getBoundingClientRect()) as {x: number; y: number}
+      const dataTransfer = new DataTransfer()
+      tile.dispatchEvent(new DragEvent('dragstart', {bubbles: true, cancelable: true, dataTransfer}))
+      const under = document.elementFromPoint(at.x, at.y)!
+      const init = {bubbles: true, cancelable: true, composed: true, clientX: at.x, clientY: at.y, dataTransfer}
+      under.dispatchEvent(new DragEvent('dragenter', init)); under.dispatchEvent(new DragEvent('dragover', init))
+      const accepted = !under.dispatchEvent(new DragEvent('drop', init))
+      tile.dispatchEvent(new DragEvent('dragend', {bubbles: true, dataTransfer}))
+      return {accepted, types: [...dataTransfer.types]}
+    }, selector, point.toString())
+    const before = await page.evaluate(() => globalThis.layerPaint!.editorStore.state.prompt)
+    const intoEditor = await dragTo('.monaco-editor .view-lines', rect => ({x: rect.left + 4, y: rect.top + 8}))
+    assert.equal(intoEditor.accepted, true); assert.ok(intoEditor.types.includes('application/x-layerpaint-ingredient'))
+    await page.waitForFunction(previous => globalThis.layerPaint!.editorStore.state.prompt !== previous, {}, before)
+    const after = await page.evaluate(() => globalThis.layerPaint!.editorStore.state.prompt)
+    assert.ok(after.startsWith('![2]'), after)
+    await page.evaluate(text => globalThis.layerPaint!.editorStore.set({prompt: text}), before)
+    const layers = await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length)
+    const onCanvas = await dragTo('[data-viewport]', rect => ({x: rect.left + rect.width * 0.3, y: rect.top + rect.height * 0.3}))
+    assert.equal(onCanvas.accepted, true)
+    const placed = await page.evaluate(() => {const h = globalThis.layerPaint!, doc = h.projectStore.state, layer = doc.layers.at(-1)!; return {count: doc.layers.length, assetId: layer.assetId, ingredientAssetId: doc.ingredients.find(item => item.index === 2)!.assetId, ingredients: doc.ingredients.length}})
+    assert.equal(placed.count, layers + 1); assert.equal(placed.assetId, placed.ingredientAssetId); assert.equal(placed.ingredients, 4, 'Placing a collection image must not create a duplicate number')
+    await page.evaluate(() => globalThis.layerPaint!.actions.undo())
+    assert.equal(await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length), layers)
   })
 
   await check('Context menu contains Frame it instead of a persistent layer button', async () => {
@@ -170,12 +224,55 @@ try {
     await page.waitForFunction(() => globalThis.layerPaint?.projectStore.state.layers.length === 3)
     assert.equal(requests.length, count + 1)
     assert.equal(requests.at(-1)!.input_references.length, 2)
+    assert.equal(requests.at(-1)!.model, 'google/gemini-nano-banana-2.1', 'Nano Banana 2.1 is the default model')
     const state = await page.evaluate(() => {const h = globalThis.layerPaint!, layer = h.projectStore.state.layers.at(-1)!; const rect = {...layer.rect}; h.actions.updateLayer(layer.id, {rect: {...rect, x: rect.x + 100}, rotation: 90}); return {rect, after: h.projectStore.state.layers.at(-1)!.rect, rotation: h.projectStore.state.layers.at(-1)!.rotation ?? 0, evidence: Boolean(layer.evidence?.canvasAssetId), cost: h.editorStore.state.sessionCost}})
     assert.deepEqual(state.after, state.rect); assert.equal(state.rotation, 0); assert.equal(state.evidence, true); assert.equal(state.cost, 0.025)
   })
 
+  await check('The generate button names the operation and the frame can be switched off', async () => {
+    await page.evaluate(() => {const h = globalThis.layerPaint!; h.actions.fitFrameToContent(); h.editorStore.set({tool: 'frame'})})
+    const area = await page.evaluate(() => {const h = globalThis.layerPaint!, base = h.projectStore.state.layers[0]; return {...base.rect}})
+    const label = async (frame: {x: number; y: number; width: number; height: number}, expected: string) => {
+      await page.evaluate(frame => globalThis.layerPaint!.editorStore.set({frame}), frame)
+      await page.waitForFunction(expected => document.querySelector('[data-testid="generate"]')?.textContent?.trim() === expected, {timeout: 3000}, expected).catch(async () => assert.fail(`Expected “${expected}”, got “${await generateLabel()}”`))
+    }
+    const all = await page.evaluate(() => globalThis.layerPaint!.editorStore.state.frame)
+    await label({x: area.x - 10 * area.width, y: area.y, width: area.width, height: area.height}, 'Generate')
+    await label({x: area.x + area.width / 2, y: area.y, width: area.width, height: area.height}, 'Extend')
+    await label({x: area.x + area.width / 4, y: area.y + area.height / 4, width: area.width / 4, height: area.height / 4}, 'Patch')
+    await label(all, 'Transform')
+    // The frame carries no text label.
+    assert.equal(await page.$eval('[data-testid="frame"]', node => node.textContent), '')
+    // Frame off: generations span all artwork, padded to the closest ratio.
+    await page.evaluate(() => globalThis.layerPaint!.editorStore.set({frame: {x: -5000, y: -5000, width: 100, height: 100}}))
+    await page.click('[data-testid="frame-toggle"]')
+    assert.equal(await page.$('[data-testid="frame"]'), null)
+    await page.waitForFunction(() => document.querySelector('[data-testid="generate"]')?.textContent?.trim() === 'Transform', {timeout: 3000})
+    await page.hover('[data-testid="generate"]')
+    await page.waitForSelector('[data-testid="content-region"]')
+    const count = requests.length
+    await page.click('[data-testid="generate"]')
+    await page.waitForFunction(count => globalThis.layerPaint!.editorStore.state.jobs.length === 0 && globalThis.layerPaint!.projectStore.state.layers.length > count, {}, await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length))
+    assert.equal(requests.length, count + 1)
+    const spanned = await page.evaluate(() => {
+      const h = globalThis.layerPaint!, layers = h.projectStore.state.layers, generated = layers.at(-1)!
+      const xs = layers.slice(0, -1).filter(layer => layer.visible).map(layer => layer.rect)
+      const left = Math.min(...xs.map(rect => rect.x)), top = Math.min(...xs.map(rect => rect.y)), right = Math.max(...xs.map(rect => rect.x + rect.width)), bottom = Math.max(...xs.map(rect => rect.y + rect.height))
+      const rect = generated.rect
+      return {covers: rect.x <= left + 1e-6 && rect.y <= top + 1e-6 && rect.x + rect.width >= right - 1e-6 && rect.y + rect.height >= bottom - 1e-6, ratio: generated.evidence!.ratio, aspect: rect.width / rect.height}
+    })
+    assert.equal(spanned.covers, true)
+    const [w, h] = spanned.ratio.split(':').map(Number); assert.ok(Math.abs(spanned.aspect - w / h) < 1e-6)
+    assert.equal(requests.at(-1)!.aspect_ratio, spanned.ratio)
+    await page.mouse.move(5, 5)
+    await page.click('[data-testid="frame-toggle"]')
+    await page.waitForSelector('[data-testid="frame"]')
+    await page.evaluate(() => {const h = globalThis.layerPaint!; h.actions.fitFrameToContent(); h.actions.fitViewToFrame()})
+  })
+
   await check('In-flight edits cannot mutate captured inputs, prompt or result placement', async () => {
     const frame = await page.evaluate(() => ({...globalThis.layerPaint!.editorStore.state.frame}))
+    const layerCount = await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length)
     await page.evaluate(() => globalThis.layerPaint!.editorStore.set({prompt: 'A localized detail repair'}))
     defer = true
     await page.click('[data-testid="generate"]')
@@ -183,7 +280,7 @@ try {
     assert.equal(pending.length, 1)
     await page.evaluate(() => {const h = globalThis.layerPaint!; h.editorStore.set({prompt: 'A different future request', frame: {...h.editorStore.state.frame, x: 999}})})
     await release()
-    await page.waitForFunction(() => globalThis.layerPaint?.projectStore.state.layers.length === 4)
+    await page.waitForFunction(count => globalThis.layerPaint?.projectStore.state.layers.length === count + 1, {}, layerCount)
     const evidence = await page.evaluate(() => {const layer = globalThis.layerPaint!.projectStore.state.layers.at(-1)!; return {rect: layer.rect, frame: layer.evidence!.frame, prompt: layer.evidence!.prompt, canvas: layer.evidence!.canvasAssetId, output: layer.evidence!.outputAssetId}})
     assert.deepEqual(evidence.rect, frame); assert.deepEqual(evidence.frame, frame); assert.equal(evidence.prompt, 'A localized detail repair'); assert.ok(evidence.canvas && evidence.canvas !== evidence.output)
   })

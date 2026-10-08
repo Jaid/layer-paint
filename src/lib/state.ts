@@ -63,6 +63,8 @@ export type ProjectDocument = {
   ingredients: ReadonlyArray<Ingredient>
   /** bottom to top; the first layer is the background layer */
   layers: ReadonlyArray<Layer>
+  /** set once every layer image has a collection number; older projects are migrated a single time, so removals stick */
+  layersNumbered?: boolean
   nextIngredientIndex?: number
 }
 
@@ -98,6 +100,8 @@ export type EditorState = {
   exportMode: 'canvas' | 'custom' | 'detail'
   exportScale: number
   frame: Rect
+  /** When off, generations span all canvas content, covered by the closest supported ratio. */
+  frameEnabled: boolean
   generationHover: boolean
   hoveredLayerId: string | null
   jobs: ReadonlyArray<Job>
@@ -145,6 +149,7 @@ export const createInitialEditorState = (): EditorState => ({
     x: 512,
     y: 512,
   }),
+  frameEnabled: true,
   jobs: [],
   // On small screens the panel would cover the frame, so it starts collapsed there.
   layersPanelOpen: typeof innerWidth === 'undefined' || innerWidth >= 900,
@@ -166,6 +171,7 @@ export const createInitialEditorState = (): EditorState => ({
 export const createEmptyDocument = (): ProjectDocument => ({
   layers: [],
   ingredients: [],
+  layersNumbered: true,
   nextIngredientIndex: 1,
 })
 

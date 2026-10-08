@@ -1,6 +1,6 @@
 import type {ProjectDocument} from './state.ts'
 
-import {advanceWorkspaceEpoch} from './actions.ts'
+import {advanceWorkspaceEpoch, withLayerIngredients} from './actions.ts'
 import {assets} from './assets.ts'
 import {flushAutosave, getPersistedEditorState, rebuildThumbnails, resumeAutosave} from './autosave.ts'
 import {createId} from './createId.ts'
@@ -90,6 +90,7 @@ export async function openPortableProject(file: Blob | File) {
   const remap = new Map(staged.map(entry => [entry.oldId, entry.id]))
   const newDocument: ProjectDocument = {
     nextIngredientIndex: document.nextIngredientIndex,
+    ...document.layersNumbered ? {layersNumbered: true} : {},
     ingredients: document.ingredients.map(item => ({
       ...item,
       id: createId(),
@@ -111,7 +112,7 @@ export async function openPortableProject(file: Blob | File) {
   for (const entry of staged) {
     await assets.add(entry.blob, entry.decoded, entry.id)
   }
-  const hydrated = await rebuildThumbnails(newDocument)
+  const hydrated = await rebuildThumbnails(withLayerIngredients(newDocument))
   if (!unchanged()) {
     throw new Error('The workspace changed while the project was opening. Your edits were preserved.')
   }

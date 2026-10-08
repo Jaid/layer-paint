@@ -12,9 +12,13 @@ $borderLight: #e4e4e4
 
 .header
   display: flex
+  flex-wrap: wrap
   align-items: center
-  gap: 10px
-  padding: 8px 10px 8px 14px
+  gap: 6px 8px
+  padding: 7px 10px 7px 14px
+  container: prompt-header / inline-size
+  > nav
+    margin-right: auto
   border-bottom: 1px solid $border
   @include light
     border-bottom-color: $borderLight
@@ -24,6 +28,7 @@ $borderLight: #e4e4e4
   align-items: center
   gap: 8px
   margin: 0
+  white-space: nowrap
   font-size: 15px
   font-weight: 300
   letter-spacing: 0.02em
@@ -36,8 +41,8 @@ $borderLight: #e4e4e4
   box-shadow: 4px 4px 0 -1px oklch(85% 0.15 200 / 60%)
 
 .saveState
-  margin-left: auto
   font-size: 11px
+  white-space: nowrap
   color: rgb(255 255 255 / 55%)
   transition: color 200ms
   @include light
@@ -115,9 +120,14 @@ $borderLight: #e4e4e4
   @include light
     color: rgb(0 0 0 / 50%)
 
+.generateRow .frameToggle
+  margin-left: auto
+  width: 38px
+  height: 38px
+  border-radius: 10px
+
 .generate
   position: relative
-  margin-left: auto
   display: inline-flex
   align-items: center
   gap: 8px
@@ -225,6 +235,9 @@ $borderLight: #e4e4e4
     height: 32px
     padding-inline: 12px
     font-size: 12px
+  .generateRow .frameToggle
+    width: 32px
+    height: 32px
   .meta
     font-size: 9px
 
@@ -247,5 +260,17 @@ $borderLight: #e4e4e4
     font-size: 10px
   .generate
     height: 29px
+  .generateRow .frameToggle
+    width: 29px
+    height: 29px
   .meta
     font-size: 8px
+
+// Project actions share the title row; secondary labels give way before anything wraps.
+@container prompt-header (max-width: 720px)
+  .title small
+    display: none
+
+@container prompt-header (max-width: 640px)
+  .saveState
+    display: none

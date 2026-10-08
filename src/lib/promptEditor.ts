@@ -1,7 +1,10 @@
+import type {Point} from './geometry.ts'
+
 import {setPrompt} from './actions.ts'
 import {editorStore} from './state.ts'
 
-type Inserter = (text: string) => void
+/** receives text and, for drops, the client point it should land at instead of the cursor */
+type Inserter = (text: string, client?: Point) => void
 
 let inserter: Inserter | undefined
 
@@ -10,10 +13,10 @@ export const registerPromptInserter = (callback: Inserter | undefined) => {
   inserter = callback
 }
 
-/** Inserts text at the editor cursor, or appends it when the editor is not mounted yet. */
-export const insertIntoPrompt = (text: string) => {
+/** Inserts text at the editor cursor (or the given client point), or appends it when the editor is not mounted yet. */
+export const insertIntoPrompt = (text: string, client?: Point) => {
   if (inserter) {
-    inserter(text)
+    inserter(text, client)
     return
   }
   const {prompt} = editorStore.state
