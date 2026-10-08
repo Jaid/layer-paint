@@ -37,7 +37,7 @@ For a static deployment, the key popover accepts a browser-session key. This key
 2. Drop reference images on the editor, or choose **Add images to collection…** from the canvas context menu. Every image in the collection – imports, generations and snapshots alike – receives a stable positive number as soon as it is added. Deleting an item does not renumber the others or reuse its number.
 3. Move the generation frame to the region you want to edit. Corner handles preserve its ratio. Edge handles snap between ratios advertised by the selected model. Handles appear when the pointer touches the frame. While the canvas has no layers, the frame stays in place and dragging inside it pans the view instead.
 4. Write a prompt and press the yellow button, or press **Ctrl+Enter**. A generation captures its input images, prompt, model settings and frame before the request is sent. Moving the frame while it runs cannot change where the result lands.
-5. Use the docked layer inspector to adjust **Area** and **Feather**. Advanced mask mode hides the generation frame and provides mask translation and roundness. Dragging inside the selected layer repositions its mask.
+5. Select a layer in the docked layer inspector to adjust **Area** and **Feather**. New layers start with a 100% area and no feather, and they are not selected automatically. Click the mask thumbnail next to a layer’s image thumbnail to enter mask edit mode, which hides the generation frame and provides mask translation and roundness. Dragging inside the selected layer repositions its mask; clicking the mask thumbnail again or pressing Escape leaves the mode.
 6. Continue with further local edits, then use **Export** for PNG, JPG, WebP or a PNG clipboard copy. Use **Save project** for an editable `.layerpaint` backup containing the source assets and request captures.
 
 ### The generate button and the frame toggle
@@ -93,7 +93,7 @@ The frame and the images have separate geometry. Generated layers remain pinned 
 
 Use the **Image** tool to drag imports, resize from a corner or rotate from the round handle. The inspector also provides numerical transform fields. Shift snaps rotation to 15-degree increments; Alt resizes around the center.
 
-Right-click the canvas or a layer for **Frame it**, visibility, ordering, deletion, framing, zoom, import, snapshot and undo/redo actions. There is no permanent floating canvas toolbar. Double-clicking a layer also frames it.
+Right-click the canvas, a layer or a row in the layer inspector for **Frame it**, visibility, ordering, deletion, framing, zoom, import, snapshot and undo/redo actions. There is no permanent floating canvas toolbar. Double-clicking a layer also frames it.
 
 The collection below the editor is a masonry grid of thumbnails, each tagged with its number. Click a thumbnail to insert its reference at the cursor, drag it into the editor to insert the reference where you drop it, or drag it onto the canvas to place a movable copy there. The badge color tells the kind apart: pink for imports, green for generations and orange for canvas snapshots (**Snapshot the frame into collection** in the canvas context menu). `![0]` always refers to the live canvas inside the frame and is not part of the collection.
 
