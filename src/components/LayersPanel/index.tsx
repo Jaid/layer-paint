@@ -20,11 +20,11 @@ export default function LayersPanel() {
     <button className={css.header} aria-expanded={editor.layersPanelOpen} type='button' onClick={() => editorStore.set({layersPanelOpen: !editor.layersPanelOpen})}><Layers size={14} /><span>Layers</span><span className={css.count}>{layers.length}</span><ChevronDown className={css.chevron} size={14} /></button>
     {editor.layersPanelOpen && <>
       <div className={css.modeButtons} aria-label='Canvas tool' role='group'>{(['frame', 'image', 'mask'] as const).map(tool => <button key={tool} aria-pressed={editor.tool === tool} disabled={tool === 'mask' && (!editor.selectedLayerId || layers[0]?.id === editor.selectedLayerId)} type='button' onClick={() => editorStore.set({tool})}>{tool === 'frame' ? 'Frame' : (tool === 'image' ? 'Image' : 'Mask')}</button>)}</div>
-      {layers.length ? <ol className={css.list}>{layers.map((layer, index) => ({
+      <ol className={css.list}>{layers.map((layer, index) => ({
         layer,
         index,
-      })).toReversed().map(({layer, index}) => <LayerRow key={layer.id} background={index === 0} layer={layer} selected={layer.id === editor.selectedLayerId} />)}</ol> : <p className={css.empty}>Each generation becomes a non-destructive layer. Drop images onto the canvas to build your starting composition.</p>}
-      <footer className={css.footer}><IconButton disabled={!history.canUndo} icon={Undo2} title='Undo (Ctrl+Z)' onClick={undo} /><IconButton disabled={!history.canRedo} icon={Redo2} title='Redo (Ctrl+Shift+Z)' onClick={redo} /><span>{Math.round(editor.view.scale * 100)}%</span><small>Right-click the canvas for actions</small></footer>
+      })).toReversed().map(({layer, index}) => <LayerRow key={layer.id} background={index === 0} layer={layer} selected={layer.id === editor.selectedLayerId} />)}</ol>
+      <footer className={css.footer}><IconButton disabled={!history.canUndo} icon={Undo2} title='Undo (Ctrl+Z)' onClick={undo} /><IconButton disabled={!history.canRedo} icon={Redo2} title='Redo (Ctrl+Shift+Z)' onClick={redo} /><span>{Math.round(editor.view.scale * 100)}%</span></footer>
     </>}
   </section>
 }

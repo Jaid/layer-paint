@@ -4,7 +4,6 @@ import type {MonacoApi, MonacoOptions} from 'monacozen'
 import Monacozen from 'monacozen'
 import {useEffect, useRef} from 'react'
 
-import PromptTips from '#component/PromptTips'
 import {setPrompt} from '#src/lib/actions.ts'
 import {generate} from '#src/lib/generation.ts'
 import {findReferences} from '#src/lib/prompt.ts'
@@ -213,7 +212,6 @@ const PromptEditor = () => {
       placeholder='Describe what should happen inside the frame…'
       onMount={handleMount}
     />
-    <PromptTips />
   </div>
 }
 

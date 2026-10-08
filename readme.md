@@ -52,6 +52,18 @@ Please put ![1] onto the head of ![0]
 The hand should hold a cup of coffee with ![2] printed on it
 ```
 
+Prompts without an explicit reference work as well, for local edits or global restyling:
+
+```markdown
+Please put a ring on the finger of ![0]
+```
+
+```markdown
+Please restyle this to be a beautiful artistic oil painting
+```
+
+When framing a local edit, leave some padding around the subject so the model sees style, lighting and proportions.
+
 Only referenced ingredients are sent. Repeated references share an attachment. Missing references, empty prompts, reference limits and explicit `![0]` on an empty frame fail before provider dispatch. Escaped references, code spans and complete standard Markdown image syntax remain literal; they do not trigger arbitrary URL fetching. HTML comments are omitted from generation prompts.
 
 ### Canvas and layers
