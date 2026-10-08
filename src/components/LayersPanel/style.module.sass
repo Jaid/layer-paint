@@ -74,13 +74,21 @@
   gap: 5px
   padding: 7px 4px
 
-.choose, .more, .name
+.choose, .name
   border: 0
   padding: 0
   background: transparent
   color: inherit
   font: inherit
   cursor: pointer
+
+.choose
+  flex-shrink: 0
+  border-radius: 6px
+  outline: 1px solid transparent
+  outline-offset: 1px
+  &.targeted
+    outline-color: #b59d69
 
 .thumbnail
   display: grid
@@ -90,9 +98,14 @@
   border-radius: 5px
   overflow: hidden
   background: repeating-conic-gradient(#7773 0 25%, transparent 0 50%) 0 0 / 8px 8px
-  img
+  img, canvas
     max-width: 100%
     max-height: 100%
+
+.maskPlaceholder
+  flex-shrink: 0
+  width: 32px
+  height: 32px
 
 .meta
   display: flex
@@ -123,12 +136,6 @@
   align-items: center
   gap: 3px
   font-size: 9px
-
-.more
-  display: grid
-  place-items: center
-  width: 20px
-  height: 24px
 
 .details
   padding: 3px 8px 10px
@@ -165,7 +172,7 @@
   font-size: 10px
   line-height: 1.5
 
-.editMask
+.editTransform
   text-align: left
   &[aria-pressed=true]
     border-color: #b59d69

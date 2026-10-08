@@ -1,14 +1,15 @@
 import type {Layer} from '#src/lib/state.ts'
 
 import clsx from 'clsx'
-import {ChevronDown, Eye, EyeOff, Layers, Lock, MoreHorizontal} from 'lucide-react'
-import {useState} from 'react'
+import {ChevronDown, Eye, EyeOff, Layers, Lock} from 'lucide-react'
+import {useEffect, useRef, useState} from 'react'
 
 import IconButton from '#component/IconButton'
 import {selectLayer, updateLayer} from '#src/lib/actions.ts'
 import {assets} from '#src/lib/assets.ts'
 import {openContextMenu} from '#src/lib/contextMenu.ts'
-import {editorStore, projectStore} from '#src/lib/state.ts'
+import {getMaskAlpha} from '#src/lib/mask.ts'
+import {defaultGeneratedMask, defaultImportedMask, editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
 
 import css from './style.module.sass'
@@ -66,26 +67,45 @@ function LayerRow({layer, background, selected}: {
   selected: boolean
 }) {
   const asset = assets.get(layer.assetId); const tool = useStore(editorStore, state => state.tool)
+  const editingMask = selected && tool === 'mask'
   const [renaming, setRenaming] = useState(false)
   const finish = (value: string) => {
     setRenaming(false); if (value.trim()) {
       updateLayer(layer.id, {name: value.trim()})
     }
   }
-  const menu = (x: number, y: number) => {
-    selectLayer(layer.id); openContextMenu(x, y, layer.id)
+  const chooseImage = () => {
+    selectLayer(layer.id)
+    if (editorStore.state.tool === 'mask') {
+      editorStore.set({tool: 'frame'})
+    }
+  }
+  const toggleMaskEdit = () => {
+    if (editingMask) {
+      editorStore.set({tool: 'frame'}); return
+    }
+    selectLayer(layer.id); editorStore.set({tool: 'mask'})
   }
   return <li
     className={clsx(css.row, selected && css.selected, !layer.visible && css.hidden)} data-kind={layer.kind} data-testid='layer-row'
     onContextMenu={event => {
-      event.preventDefault(); menu(event.clientX, event.clientY)
+      event.preventDefault(); selectLayer(layer.id); openContextMenu(event.clientX, event.clientY, layer.id)
     }} onMouseEnter={() => editorStore.set({hoveredLayerId: layer.id})}
     onMouseLeave={() => editorStore.set({hoveredLayerId: null})}
   >
     <div className={css.rowMain}>
-      <button className={css.choose} aria-pressed={selected} title={`Select ${layer.name}`} type='button' onClick={() => selectLayer(layer.id)}>
+      <button className={clsx(css.choose, selected && !editingMask && css.targeted)} aria-pressed={selected && !editingMask} title={`Select ${layer.name}`} type='button' onClick={chooseImage}>
         <span className={css.thumbnail}>{asset && <img alt='' draggable={false} src={asset.url} />}</span>
       </button>
+      {background ? <span className={css.maskPlaceholder} aria-hidden /> : <button
+        className={clsx(css.choose, editingMask && css.targeted)}
+        aria-label={editingMask ? `Finish editing the mask of ${layer.name}` : `Edit the mask of ${layer.name}`}
+        aria-pressed={editingMask}
+        data-testid='mask-thumbnail'
+        title={editingMask ? 'Finish mask edit' : 'Edit mask'}
+        type='button'
+        onClick={toggleMaskEdit}
+      ><MaskThumbnail layer={layer} /></button>}
       <div className={css.meta}>
         {renaming ? <input
           className={css.nameInput} aria-label='Layer name' autoFocus defaultValue={layer.name} onBlur={event => finish(event.currentTarget.value)} onKeyDown={event => {
@@ -95,22 +115,16 @@ function LayerRow({layer, background, selected}: {
               setRenaming(false)
             }
           }}
-        /> : <button className={css.name} title={`${layer.name} · double-click to rename`} type='button' onClick={() => selectLayer(layer.id)} onDoubleClick={() => setRenaming(true)}>{layer.name}</button>}
+        /> : <button className={css.name} title={`${layer.name} · double-click to rename`} type='button' onClick={chooseImage} onDoubleClick={() => setRenaming(true)}>{layer.name}</button>}
         <span className={css.subtitle}>{layer.kind === 'generated' ? <><Lock aria-hidden size={10} />generation</> : 'import'}{background && ' · base'}{layer.evidence?.demo && ' · demo'}{layer.aligned && ' · realigned'}</span>
       </div>
       <IconButton icon={layer.visible ? Eye : EyeOff} size={14} title={layer.visible ? 'Hide layer' : 'Show layer'} onClick={() => updateLayer(layer.id, {visible: !layer.visible})} />
-      <button
-        className={css.more} aria-label={`Actions for ${layer.name}`} type='button' onClick={event => {
-          const rect = event.currentTarget.getBoundingClientRect(); menu(rect.left, rect.bottom)
-        }}
-      ><MoreHorizontal size={14} /></button>
     </div>
     {selected && <div className={css.details}>
       {!background && <>
         <MaskSlider label='Area' layer={layer} property='area' />
         <MaskSlider label='Feather' layer={layer} property='feather' />
-        <button className={css.editMask} aria-pressed={tool === 'mask'} type='button' onClick={() => editorStore.set({tool: tool === 'mask' ? 'frame' : 'mask'})}>{tool === 'mask' ? 'Finish mask edit' : 'Advanced mask'}</button>
-        {tool === 'mask' && <>
+        {editingMask && <>
           <MaskSlider label='Roundness' layer={layer} property='roundness' />
           <MaskSlider label='Mask X' layer={layer} min={-100} property='offsetX' />
           <MaskSlider label='Mask Y' layer={layer} min={-100} property='offsetY' />
@@ -118,8 +132,7 @@ function LayerRow({layer, background, selected}: {
           <p className={css.note}>Drag the mask on the canvas to reposition it. By default, feathering blends overlaps and preserves exposed outer edges.</p>
           <button
             type='button' onClick={() => updateLayer(layer.id, {
-              area: 1,
-              feather: 0.12,
+              ...layer.kind === 'generated' ? defaultGeneratedMask : defaultImportedMask,
               offsetX: 0,
               offsetY: 0,
               roundness: 0,
@@ -130,11 +143,42 @@ function LayerRow({layer, background, selected}: {
       </>}
       {background && <p className={css.note}>The bottom layer is the unmasked base.</p>}
       {layer.kind === 'import' && <>
-        <button className={css.editMask} aria-pressed={tool === 'image'} type='button' onClick={() => editorStore.set({tool: tool === 'image' ? 'frame' : 'image'})}>{tool === 'image' ? 'Finish transform' : 'Move, resize & rotate'}</button>
+        <button className={css.editTransform} aria-pressed={tool === 'image'} type='button' onClick={() => editorStore.set({tool: tool === 'image' ? 'frame' : 'image'})}>{tool === 'image' ? 'Finish transform' : 'Move, resize & rotate'}</button>
         {tool === 'image' && <TransformFields layer={layer} />}
       </>}
       {layer.kind === 'generated' && <p className={css.note}>Placement is locked to the captured generation frame. {asset ? `${asset.width} × ${asset.height} source pixels.` : ''}</p>}
       {layer.evidence && <details className={css.provenance}><summary>Request capture</summary><p>{new Date(layer.evidence.capturedAt).toLocaleString()}<br />{layer.evidence.modelId}<br />{layer.evidence.ratio} · {layer.evidence.resolution || layer.evidence.quality || 'default'}<br />{layer.evidence.referenceAssetIds.length} reference image(s){layer.evidence.canvasAssetId ? ' + captured canvas' : ''}</p><pre>{layer.evidence.prompt}</pre><p>The exact input and raw output images are retained in the editable project.</p></details>}
     </div>}
   </li>
+}
+
+const maskThumbnailSide = 64
+/** grayscale preview of a layer mask: white keeps the layer, black hides it */
+function MaskThumbnail({layer}: {layer: Layer}) {
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const {area, feather, offsetX, offsetY, roundness} = layer
+  const aspect = layer.rect.width / layer.rect.height
+  const width = Math.max(1, Math.round(aspect >= 1 ? maskThumbnailSide : maskThumbnailSide * aspect))
+  const height = Math.max(1, Math.round(aspect >= 1 ? maskThumbnailSide / aspect : maskThumbnailSide))
+  useEffect(() => {
+    const context = canvas.current?.getContext('2d')
+    if (!context) {
+      return
+    }
+    const size = {width, height}
+    const settings = {area, feather, offsetX, offsetY, roundness}
+    const pixels = context.createImageData(width, height)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const value = Math.round(getMaskAlpha(settings, size, x + 0.5, y + 0.5) * 255)
+        const index = (y * width + x) * 4
+        pixels.data[index] = value
+        pixels.data[index + 1] = value
+        pixels.data[index + 2] = value
+        pixels.data[index + 3] = 255
+      }
+    }
+    context.putImageData(pixels, 0, 0)
+  }, [area, feather, offsetX, offsetY, roundness, width, height])
+  return <span className={css.thumbnail}><canvas aria-hidden height={height} width={width} ref={canvas} /></span>
 }
