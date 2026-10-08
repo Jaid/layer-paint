@@ -14,7 +14,7 @@ import {openContextMenu} from '#src/lib/contextMenu.ts'
 import {rectCenter, rectContains, rectFromCenter} from '#src/lib/geometry.ts'
 import {corners, getSnapTargets, moveRectWithSnapping, resizeFrameFromEdge, resizeRectFromCorner} from '#src/lib/interaction.ts'
 import {getLayerBounds, layerToWorld, worldToLayer} from '#src/lib/layerGeometry.ts'
-import {getMaskMetrics} from '#src/lib/mask.ts'
+import {getFeatherCore, getMaskMetrics} from '#src/lib/mask.ts'
 import {getModel} from '#src/lib/models/index.ts'
 import {getContentRegion} from '#src/lib/generationRegion.ts'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
@@ -451,7 +451,7 @@ function LayerOutline({layer, view, masked, transform}: {
   view: View
 }) {
   const screen = toScreenRect(view, layer.rect); const metrics = getMaskMetrics(layer, layer.rect)
-  const inner = metrics.transition
+  const core = getFeatherCore(layer, layer.rect); const inner = core.inset
   return <div className={clsx(css.selection, layer.kind === 'generated' && css.generatedSelection)} data-testid='layer-outline' style={rectStyle(screen, layer.rotation)}>
     {masked && layer.area < 1 && <div
       className={css.maskOutline} data-testid='mask-outline' style={{
@@ -468,7 +468,7 @@ function LayerOutline({layer, view, masked, transform}: {
         top: (metrics.y + inner) * view.scale,
         width: Math.max(0, metrics.width - inner * 2) * view.scale,
         height: Math.max(0, metrics.height - inner * 2) * view.scale,
-        borderRadius: Math.max(0, metrics.radius - inner) * view.scale,
+        borderRadius: core.radius * view.scale,
       }}
     />}
     {transform && <>

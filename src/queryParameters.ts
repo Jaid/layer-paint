@@ -1,11 +1,20 @@
 import readPermalink, {parseNumber} from 'read-permalink'
 
+import {defaultFeatherMethodId, featherMethodIds, isFeatherMethodId, parseFeatherMethodId} from '#src/lib/feather/featherMethodIds.ts'
+
 const optionalString = (value: unknown) => (value === undefined || value === null ? '' : String(value))
 const fraction = (value: unknown) => {
   const number = parseNumber(value)
   // Percentages like “35” are accepted as well as fractions like “0.35”.
   const normalized = number > 1 ? number / 100 : number
   return Math.min(1, Math.max(0, normalized))
+}
+const featherMethod = (value: unknown) => {
+  const id = parseFeatherMethodId(value)
+  if (!isFeatherMethodId(String(value).trim().toLowerCase())) {
+    console.warn(`Unknown feather_method “${String(value)}”, using “${id}”. Available: ${featherMethodIds.join(', ')}`)
+  }
+  return id
 }
 const queryParameters = readPermalink(typeof location === 'undefined' ? '' : location.href, {schema: {
   defaults: {
@@ -23,6 +32,8 @@ const queryParameters = readPermalink(typeof location === 'undefined' ? '' : loc
     feather: 0,
     /** default mask area for new generated layers, 0–1 or 0–100 */
     area: 1,
+    /** feather algorithm: “smooth” (default; crease-free contours that also hide where the artwork below ends) or “distance” (the original signed-distance ramp) */
+    feather_method: defaultFeatherMethodId,
   },
   normalizations: {
     model: String,
@@ -32,6 +43,7 @@ const queryParameters = readPermalink(typeof location === 'undefined' ? '' : loc
     prompt: optionalString,
     feather: fraction,
     area: fraction,
+    feather_method: featherMethod,
   },
 }})
 

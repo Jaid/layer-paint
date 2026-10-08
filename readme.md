@@ -103,6 +103,13 @@ Area measures rectangular area: **25% means half the width and half the height**
 
 Feathering blends where the layer overlaps existing visual coverage. Exposed outpainting edges stay opaque instead of fading away. Enable **Feather exposed edges too** only when that behavior is deliberately desired.
 
+The feather algorithm can be chosen with the `?feather_method=` URL parameter:
+
+| Value | Behavior |
+| --- | --- |
+| `smooth` (default) | The ramp follows nested rounded rectangles whose corners round off toward the center, so corners show no diagonal crease and there is no ridge along the center line. Straight edges keep exactly the requested feather width. The quintic ramp avoids visible bands where it starts and ends. Where the artwork below a layer ends inside its feather band, the layer turns opaque in a smooth wedge toward that edge, so the edge does not show through as a hard line. |
+| `distance` | The original ramp: smoothstep over the exact distance to the mask edge. |
+
 Hovering or selecting a layer reveals its image bounds. Contracted masks add a second outline, and feathering adds an inner transition outline. Viewport rendering, generation inputs, snapshots, clipboard operations and raster exports use the same compositor.
 
 ### Export resolution
