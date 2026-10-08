@@ -1,0 +1,31 @@
+.indicator
+  position: absolute
+  top: 12px
+  right: 12px
+  z-index: 5
+  padding: 5px 9px
+  border: 1px solid rgb(255 255 255 / 10%)
+  border-radius: 7px
+  color: #e9d398
+  background: rgb(10 11 13 / 85%)
+  backdrop-filter: blur(12px)
+  font-size: 12px
+  font-variant-numeric: tabular-nums
+  white-space: nowrap
+  pointer-events: none
+  opacity: 0
+  translate: 0 -4px
+  transition: opacity 300ms, translate 300ms
+  &[data-visible]
+    opacity: 1
+    translate: 0 0
+    transition-duration: 80ms
+  @include light
+    border-color: rgb(0 0 0 / 10%)
+    color: #75460e
+    background: rgb(255 255 255 / 90%)
+
+@media (prefers-reduced-motion: reduce)
+  .indicator
+    translate: none
+    transition: none

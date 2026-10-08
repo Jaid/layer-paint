@@ -24,7 +24,7 @@ export default function LayersPanel() {
         layer,
         index,
       })).toReversed().map(({layer, index}) => <LayerRow key={layer.id} background={index === 0} layer={layer} selected={layer.id === editor.selectedLayerId} />)}</ol>
-      <footer className={css.footer}><IconButton disabled={!history.canUndo} icon={Undo2} title='Undo (Ctrl+Z)' onClick={undo} /><IconButton disabled={!history.canRedo} icon={Redo2} title='Redo (Ctrl+Shift+Z)' onClick={redo} /><span>{Math.round(editor.view.scale * 100)}%</span></footer>
+      <footer className={css.footer}><IconButton disabled={!history.canUndo} icon={Undo2} title='Undo (Ctrl+Z)' onClick={undo} /><IconButton disabled={!history.canRedo} icon={Redo2} title='Redo (Ctrl+Shift+Z)' onClick={redo} /></footer>
     </>}
   </section>
 }
