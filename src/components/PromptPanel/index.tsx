@@ -25,7 +25,7 @@ export default function PromptPanel() {
   const charged = (value: boolean) => editorStore.set({generationHover: value})
   const mode = useGenerationMode()
   return <div className={css.panel} data-drop-target='editor'>
-    <header className={css.header}><h1 className={css.title}><span className={css.logo} aria-hidden />LayerPaint <small>studio</small></h1><ProjectBar /><span className={clsx(css.saveState, storage.error && css.saveError)} title={storage.error || 'Images and project state are saved in this browser'}>{storage.paused ? 'recovery paused' : !storage.hydrated ? 'opening…' : storage.saving ? 'saving…' : storage.error ? 'save failed' : storage.lastSavedAt ? 'saved locally' : 'local workspace'}</span><ApiKeySettings /></header>
+    <header className={css.header}><h1 className={css.title}><span className={css.logo} aria-hidden />LayerPaint</h1><ProjectBar /><span className={clsx(css.saveState, storage.error && css.saveError)} title={storage.error || 'Images and project state are saved in this browser'}>{storage.paused ? 'recovery paused' : !storage.hydrated ? 'opening…' : storage.saving ? 'saving…' : storage.error ? 'save failed' : storage.lastSavedAt ? 'saved locally' : 'local workspace'}</span><ApiKeySettings /></header>
     <PromptEditor />
     <Ingredients />
     <footer className={css.footer}>

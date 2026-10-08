@@ -168,13 +168,6 @@ $borderLight: #e4e4e4
   color: white
   background: oklch(60% 0.2 30)
 
-.title small
-  color: var(--muted)
-  font-size: 9px
-  letter-spacing: 0.12em
-  text-transform: uppercase
-  margin-left: 3px
-
 .optionsRow
   display: flex
   align-items: center
@@ -267,10 +260,6 @@ $borderLight: #e4e4e4
     font-size: 8px
 
 // Project actions share the title row; secondary labels give way before anything wraps.
-@container prompt-header (max-width: 720px)
-  .title small
-    display: none
-
 @container prompt-header (max-width: 640px)
   .saveState
     display: none
