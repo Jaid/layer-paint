@@ -3,7 +3,7 @@ import type {ProjectDocument} from './state.ts'
 
 import queryParameters, {explicitQueryKeys} from '#src/queryParameters.ts'
 
-import {setModel, setRatio} from './actions.ts'
+import {setModel, setRatio, withLayerIngredients} from './actions.ts'
 import {assets} from './assets.ts'
 import {createThumbnailDataUrl, decodeImage} from './image.ts'
 import {getModel} from './models/index.ts'
@@ -22,9 +22,10 @@ export const persistenceStore = new Store({
   error: '',
 })
 export const getPersistedEditorState = (): PersistedEditorState => {
-  const {frame, layersPanelOpen, modelId, prompt, quality, ratio, resolution, view, exportMode, exportScale, alignOutput, demoMode} = editorStore.state
+  const {frame, frameEnabled, layersPanelOpen, modelId, prompt, quality, ratio, resolution, view, exportMode, exportScale, alignOutput, demoMode} = editorStore.state
   return {
     frame,
+    frameEnabled,
     layersPanelOpen,
     modelId,
     prompt,
@@ -127,7 +128,7 @@ async function restore() {
   for (const entry of decoded) {
     await assets.add(entry.blob, entry.image, entry.id)
   }
-  projectStore.reset(await rebuildThumbnails(document))
+  projectStore.reset(await rebuildThumbnails(withLayerIngredients(document)))
   editorStore.set({
     ...editor,
     prompt: explicitQueryKeys.has('prompt') ? queryParameters.prompt : editor.prompt,

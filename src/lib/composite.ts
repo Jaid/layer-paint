@@ -124,3 +124,23 @@ export const findLayerAt = (layers: ReadonlyArray<Layer>, point: Point) => layer
   }
   return i === 0 || layer.area > 0 && maskDistance(layer, layer.rect, local.x, local.y) <= 0
 })
+
+/** Fraction of the region that stays empty, probed at low resolution; pixels count as covered once they are at least half opaque. */
+export function measureUncovered(layers: ReadonlyArray<Layer>, region: Rect, maxSide = 128) {
+  const scale = maxSide / Math.max(region.width, region.height)
+  const {canvas} = renderRegion({
+    layers,
+    region,
+    size: {
+      width: Math.max(1, Math.round(region.width * scale)),
+      height: Math.max(1, Math.round(region.height * scale)),
+    },
+    measureEmpty: false,
+  })
+  const {data} = getContext(canvas).getImageData(0, 0, canvas.width, canvas.height)
+  let empty = 0
+  for (let i = 3; i < data.length; i += 4) {
+    empty += data[i] < 128 ? 1 : 0
+  }
+  return empty / (canvas.width * canvas.height)
+}

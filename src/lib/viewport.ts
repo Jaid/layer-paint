@@ -61,9 +61,9 @@ export type Insets = {
   top: number
 }
 
-/** Space covered by floating UI (frame label on top, toolbar at the bottom, layers panel on the right). */
+/** breathing room around fitted content; the layers panel is docked beside the viewport, not over it */
 export const getOverlayInsets = (_size: Size = viewportSize): Insets => ({
-  top: 44,
+  top: 24,
   bottom: 24,
   left: 22,
   right: 22,

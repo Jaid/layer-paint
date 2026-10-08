@@ -1,6 +1,7 @@
 import type {Point, Rect} from './geometry.ts'
 import type {RatioString} from './ratio.ts'
 import type {Ingredient, Layer, ProjectDocument} from './state.ts'
+import type {Asset} from './assets.ts'
 import type {CommitOptions} from './store/index.ts'
 
 import {createId} from '#src/lib/createId.ts'
@@ -9,6 +10,7 @@ import {assets} from './assets.ts'
 import {getContentBounds} from './composite.ts'
 import {containSize, coverRect, rectCenter, rectFromCenter, sizeFromArea} from './geometry.ts'
 import {createThumbnailDataUrl, looksLikeImage, normalizeImportedImage} from './image.ts'
+import {getGenerationRegion} from './generationRegion.ts'
 import {getModel} from './models/index.ts'
 import {getErrorMessage, notify} from './notices.ts'
 import {closestRatio, parseRatio} from './ratio.ts'
@@ -57,8 +59,13 @@ export const fitFrameToContent = () => {
   fitFrameToRect(bounds)
 }
 
+/** Shows the region the next generation uses: the frame, or all artwork while the frame is off. */
 export const fitViewToFrame = () => {
-  fitViewToRect(editorStore.state.frame)
+  fitViewToRect(getGenerationRegion(editorStore.state, projectStore.state.layers).frame)
+}
+
+export const setFrameEnabled = (frameEnabled: boolean) => {
+  editorStore.set({frameEnabled})
 }
 
 export const fitViewToContent = () => {
@@ -176,20 +183,44 @@ export const moveLayerInStack = (id: string, direction: -1 | 1) => {
   })
 }
 
-export const addLayer = (layer: Layer) => {
-  projectStore.commit(document => ({
+/** Adds a layer, and its collection entry when the layer’s image is not in the collection yet, as one undo step. */
+export const addLayer = (layer: Layer, ingredient?: Ingredient) => {
+  projectStore.commit(document => withIngredient({
     ...document,
     layers: [...document.layers, layer],
-  }))
+  }, ingredient))
 }
 
 const importOffset = 32
 
 /**
- * Adds dropped or pasted images as canvas layers.
- * The very first image defines the world scale: it is placed at its natural size and the frame and view adapt to it.
- * Later images are centered on the drop point and scaled down to fit into the frame if they are larger.
+ * Where a new canvas image goes.
+ * The very first image defines the world scale: it is placed at its natural size.
+ * Later images are centered on the given point (or the frame) and scaled down to fit into the frame if they are larger.
  */
+export const getPlacementRect = (size: {
+  height: number
+  width: number
+}, worldPoint?: Point, offset = 0): Rect => {
+  if (projectStore.state.layers.length === 0) {
+    return worldPoint ? rectFromCenter(worldPoint, size) : {
+      x: 0,
+      y: 0,
+      width: size.width,
+      height: size.height,
+    }
+  }
+  const {frame} = editorStore.state
+  const fits = size.width <= frame.width && size.height <= frame.height
+  const fitted = fits ? size : containSize(frame, size.width / size.height)
+  const center = worldPoint ?? rectCenter(frame)
+  return rectFromCenter({
+    x: center.x + offset,
+    y: center.y + offset,
+  }, fitted)
+}
+
+/** Adds dropped or pasted images as canvas layers. Each one also becomes a numbered collection item. */
 export const importLayers = async (files: ReadonlyArray<File>, worldPoint?: Point) => {
   const epoch = workspaceEpoch
   const images = files.filter(looksLikeImage)
@@ -204,41 +235,27 @@ export const importLayers = async (files: ReadonlyArray<File>, worldPoint?: Poin
         decoded.bitmap.close(); return []
       }
       const asset = await assets.add(blob, decoded)
+      const name = stripExtension(file.name || 'Pasted image')
+      const ingredient = await createIngredient(asset, name, 'import')
+      if (epoch !== workspaceEpoch) {
+        return []
+      }
       const isFirst = projectStore.state.layers.length === 0
-      let rect: Rect
-      if (isFirst) {
-        rect = {
-          x: 0,
-          y: 0,
-          width: asset.width,
-          height: asset.height,
-        }
-      } else {
-        const {frame} = editorStore.state
-        const natural = {
-          width: asset.width,
-          height: asset.height,
-        }
-        const fits = natural.width <= frame.width && natural.height <= frame.height
-        const size = fits ? natural : containSize(frame, natural.width / natural.height)
-        const center = worldPoint ?? rectCenter(frame)
-        rect = rectFromCenter({
-          x: center.x + offset,
-          y: center.y + offset,
-        }, size)
+      const rect = getPlacementRect(asset, isFirst ? undefined : worldPoint, isFirst ? 0 : offset)
+      if (!isFirst) {
         offset += importOffset
       }
       const layer: Layer = {
         ...defaultImportedMask,
         id: createId(),
         kind: 'import',
-        name: stripExtension(file.name || 'Pasted image'),
+        name,
         assetId: asset.id,
         rect,
         visible: true,
         createdAt: Date.now(),
       }
-      addLayer(layer)
+      addLayer(layer, ingredient)
       selectLayer(layer.id)
       if (isFirst) {
         fitFrameToRect(rect)
@@ -258,6 +275,63 @@ export const getNextIngredientIndex = (ingredients: ReadonlyArray<Ingredient>) =
   return ingredientSequence++
 }
 
+/** Builds a numbered collection entry. The number is reserved immediately, so it is never handed out twice. */
+export const createIngredient = async (asset: Asset, name: string, kind: NonNullable<Ingredient['kind']>): Promise<Ingredient> => {
+  const index = getNextIngredientIndex(projectStore.state.ingredients)
+  return {
+    id: createId(),
+    index,
+    assetId: asset.id,
+    name,
+    kind,
+    thumbnail: await createThumbnailDataUrl(asset.bitmap),
+    createdAt: Date.now(),
+  }
+}
+
+/** Adds the entry unless the collection already holds its image. */
+export const withIngredient = (document: ProjectDocument, ingredient?: Ingredient): ProjectDocument => {
+  if (!ingredient || document.ingredients.some(item => item.assetId === ingredient.assetId || item.index === ingredient.index)) {
+    return document
+  }
+  return {
+    ...document,
+    nextIngredientIndex: Math.max(document.nextIngredientIndex ?? 1, ingredient.index + 1),
+    ingredients: [...document.ingredients, ingredient],
+  }
+}
+
+/** Older projects only numbered images once they were referenced. They get a number for every layer image once; thumbnails are filled in later. */
+export const withLayerIngredients = (document: ProjectDocument): ProjectDocument => {
+  if (document.layersNumbered) {
+    return document
+  }
+  const known = new Set(document.ingredients.map(item => item.assetId))
+  let next = Math.max(document.nextIngredientIndex ?? 1, ...document.ingredients.map(item => item.index + 1))
+  const added: Array<Ingredient> = []
+  for (const layer of document.layers) {
+    if (known.has(layer.assetId)) {
+      continue
+    }
+    known.add(layer.assetId)
+    added.push({
+      id: createId(),
+      index: next++,
+      assetId: layer.assetId,
+      name: layer.name,
+      kind: layer.kind,
+      thumbnail: '',
+      createdAt: layer.createdAt,
+    })
+  }
+  return {
+    ...document,
+    ingredients: [...document.ingredients, ...added],
+    layersNumbered: true,
+    nextIngredientIndex: next,
+  }
+}
+
 export const addIngredients = async (files: ReadonlyArray<File>) => {
   const epoch = workspaceEpoch
   const images = files.filter(looksLikeImage)
@@ -272,22 +346,11 @@ export const addIngredients = async (files: ReadonlyArray<File>) => {
         decoded.bitmap.close(); return []
       }
       const asset = await assets.add(blob, decoded)
-      const ingredient: Ingredient = {
-        id: createId(),
-        index: getNextIngredientIndex(projectStore.state.ingredients),
-        assetId: asset.id,
-        name: stripExtension(file.name || 'Pasted image'),
-        thumbnail: await createThumbnailDataUrl(asset.bitmap),
-        createdAt: Date.now(),
-      }
+      const ingredient = await createIngredient(asset, stripExtension(file.name || 'Pasted image'), 'import')
       if (epoch !== workspaceEpoch) {
         return []
       }
-      projectStore.commit(document => ({
-        ...document,
-        nextIngredientIndex: ingredientSequence,
-        ingredients: [...document.ingredients, ingredient],
-      }))
+      projectStore.commit(document => withIngredient(document, ingredient))
       added.push(ingredient)
     } catch (error) {
       notify('error', `Could not add ${file.name || 'image'}: ${getErrorMessage(error)}`)
@@ -329,6 +392,7 @@ export const resetProject = () => {
     resolution: state.resolution,
     quality: state.quality,
     ratio: state.ratio,
+    frameEnabled: state.frameEnabled,
     frame: rectFromCenter({
       x: 512,
       y: 512,

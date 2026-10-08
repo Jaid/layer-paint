@@ -113,6 +113,7 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
     layers,
     ingredients,
     nextIngredientIndex: Number(next),
+    ...value.layersNumbered === true ? {layersNumbered: true} : {},
   }
 }
 export function collectDocumentAssetIds(documents: Iterable<ProjectDocument>) {
@@ -148,6 +149,7 @@ export function parseEditor(value: unknown): PersistedEditorState {
   const ratio = model.supportsRatio(value.ratio) ? value.ratio : closestRatio(parseRatio(value.ratio), model.aspectRatios)
   return {
     frame: parseRect(value.frame),
+    frameEnabled: typeof value.frameEnabled === 'boolean' ? value.frameEnabled : true,
     view: {
       x: number(value.view.x, -1e10, 1e10),
       y: number(value.view.y, -1e10, 1e10),

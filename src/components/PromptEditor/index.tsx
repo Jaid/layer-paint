@@ -5,9 +5,10 @@ import Monacozen from 'monacozen'
 import {useEffect, useRef} from 'react'
 
 import {setPrompt} from '#src/lib/actions.ts'
+import {getDroppedIngredient, getReferenceText, isIngredientDrag} from '#src/lib/collectionDrag.ts'
 import {generate} from '#src/lib/generation.ts'
 import {findReferences} from '#src/lib/prompt.ts'
-import {registerPromptInserter} from '#src/lib/promptEditor.ts'
+import {insertIntoPrompt, registerPromptInserter} from '#src/lib/promptEditor.ts'
 import {editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
 import {useDarkMode} from '#src/lib/useDarkMode.ts'
@@ -103,10 +104,11 @@ const registerProviders = (monaco: MonacoApi) => {
         return
       }
       const range = new monaco.Range(position.lineNumber, reference.start + 1, position.lineNumber, reference.end + 1)
+      const described = reference.description ? [{value: `described as “${reference.description}”`}] : []
       if (reference.index === 0) {
         return {
           range,
-          contents: [{value: '**canvas** – everything inside the frame'}],
+          contents: [{value: '**canvas** – everything inside the frame'}, ...described],
         }
       }
       const ingredient = findIngredient(reference.index)
@@ -118,7 +120,7 @@ const registerProviders = (monaco: MonacoApi) => {
       }
       return {
         range,
-        contents: [{value: `**${ingredient.name}**`}, {value: `![${ingredient.name}](${ingredient.thumbnail})`}],
+        contents: [{value: `**${ingredient.name}**`}, ...described, {value: `![${ingredient.name}](${ingredient.thumbnail})`}],
       }
     },
   })
@@ -131,6 +133,50 @@ const PromptEditor = () => {
   const decorationsRef = useRef<DecorationsCollection | null>(null)
   const monacoRef = useRef<MonacoApi | null>(null)
   const cleanupRef = useRef<(() => void) | undefined>(undefined)
+  const containerRef = useRef<HTMLDivElement>(null)
+  // Collection thumbnails drop as references at the pointer. Capturing keeps Monaco’s own text drop and the file dropzone out of it.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
+    const positionAt = (event: DragEvent) => editorRef.current?.getTargetAtClientPoint(event.clientX, event.clientY)?.position
+    const over = (event: DragEvent) => {
+      if (!isIngredientDrag(event.dataTransfer)) {
+        return
+      }
+      event.preventDefault(); event.stopPropagation()
+      event.dataTransfer!.dropEffect = 'copy'
+      const position = positionAt(event)
+      if (position && editorRef.current) {
+        editorRef.current.setPosition(position)
+        if (!editorRef.current.hasTextFocus()) {
+          editorRef.current.focus()
+        }
+      }
+    }
+    const drop = (event: DragEvent) => {
+      if (!isIngredientDrag(event.dataTransfer)) {
+        return
+      }
+      event.preventDefault(); event.stopPropagation()
+      const ingredient = getDroppedIngredient(event.dataTransfer)
+      if (ingredient) {
+        insertIntoPrompt(getReferenceText(ingredient), {
+          x: event.clientX,
+          y: event.clientY,
+        })
+      }
+    }
+    container.addEventListener('dragenter', over, true)
+    container.addEventListener('dragover', over, true)
+    container.addEventListener('drop', drop, true)
+    return () => {
+      container.removeEventListener('dragenter', over, true)
+      container.removeEventListener('dragover', over, true)
+      container.removeEventListener('drop', drop, true)
+    }
+  }, [])
   const updateDecorations = () => {
     const editor = editorRef.current
     const monaco = monacoRef.current
@@ -139,15 +185,25 @@ const PromptEditor = () => {
       return
     }
     const available = new Set(getIngredients().map(ingredient => ingredient.index))
-    const decorations = findReferences(model.getValue()).map(reference => {
-      const start = model.getPositionAt(reference.start)
-      const end = model.getPositionAt(reference.end)
+    const range = (from: number, to: number) => {
+      const start = model.getPositionAt(from)
+      const end = model.getPositionAt(to)
+      return new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column)
+    }
+    const decorations = findReferences(model.getValue()).flatMap(reference => {
       const valid = reference.index === 0 || available.has(reference.index)
       const className = reference.index === 0 ? css.canvasReference : (valid ? css.reference : css.missingReference)
-      return {
-        range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+      const token = {
+        range: range(reference.start, reference.referenceEnd),
         options: {inlineClassName: className},
       }
+      if (reference.end === reference.referenceEnd) {
+        return [token]
+      }
+      return [token, {
+        range: range(reference.referenceEnd, reference.end),
+        options: {inlineClassName: css.referenceDescription},
+      }]
     })
     decorationsRef.current.set(decorations)
   }
@@ -181,9 +237,10 @@ const PromptEditor = () => {
         void generate()
       },
     })
-    registerPromptInserter(text => {
-      const selection = editor.getSelection()
+    registerPromptInserter((text, client) => {
       const model = editor.getModel()
+      const dropped = client ? editor.getTargetAtClientPoint(client.x, client.y)?.position : undefined
+      const selection = dropped ? new monaco.Selection(dropped.lineNumber, dropped.column, dropped.lineNumber, dropped.column) : editor.getSelection()
       if (!selection || !model) {
         return
       }
@@ -203,7 +260,7 @@ const PromptEditor = () => {
     })
     updateDecorations()
   }
-  return <div className={css.container} data-testid='prompt-editor'>
+  return <div className={css.container} data-testid='prompt-editor' ref={containerRef}>
     <Monacozen
       aria-label='Prompt'
       dark={dark}
