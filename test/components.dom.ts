@@ -249,9 +249,97 @@ describe('components', () => {
     act(() => jest.advanceTimersByTime(1))
     expect(indicator.hasAttribute('data-visible')).toBe(false)
   })
-  test('CanvasToolbar', async () => {
-    const {container} = await renderComponent('CanvasToolbar')
-    expect(container.textContent).toContain('Export')
-    expect(container.textContent).toMatch(/\d+%/)
+  test('there is no Export button; the dialog only opens on request', async () => {
+    const {exportDialogStore, openExportDialog} = await import('#src/lib/exporting.ts')
+    const panel = await renderComponent('PromptPanel')
+    expect([...panel.container.querySelectorAll('button')].some(button => /export/i.test(button.textContent ?? ''))).toBe(false)
+    cleanup()
+    const {container} = await renderComponent('ExportDialog')
+    const dialog = container.querySelector<HTMLDialogElement>('[data-testid="export-dialog"]')!
+    expect(dialog.textContent).toBe('')
+    act(() => openExportDialog('frame'))
+    expect(dialog.textContent).toContain('Export image')
+    expect(container.querySelector<HTMLSelectElement>('[aria-label="Export region"]')?.value).toBe('frame')
+    act(() => (container.querySelector('[aria-label="Close export"]') as HTMLButtonElement).click())
+    expect(exportDialogStore.state.open).toBe(false)
+  })
+  test('the collection starts with a live frame view at position 0', async () => {
+    const {projectStore} = await import('#src/lib/state.ts')
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [{
+        id: 'ingredient-1',
+        assetId: 'missing-1',
+        index: 1,
+        name: 'Image 1',
+        kind: 'import' as const,
+        thumbnail: 'data:image/webp;base64,AAAA',
+        createdAt: 0,
+      }],
+      nextIngredientIndex: 2,
+    }))
+    const {container} = await renderComponent('Ingredients')
+    const tiles = [...container.querySelectorAll<HTMLElement>('[data-index]')]
+    expect(tiles.map(tile => tile.dataset.index)).toEqual(['0', '1'])
+    expect(tiles[0].dataset.testid).toBe('frame-view')
+    expect(tiles[0].querySelector('canvas')).not.toBeNull()
+    // The live view is not a collection item, so it cannot be removed.
+    expect(tiles[0].querySelector('[aria-label^="Remove"]')).toBeNull()
+    cleanup()
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [],
+    }))
+    const empty = await renderComponent('Ingredients')
+    expect(empty.container.querySelectorAll('[data-testid="frame-view"]')).toHaveLength(1)
+    expect(empty.container.textContent).toContain('collection')
+  })
+  test('collection items offer Export in their context menu', async () => {
+    const {projectStore} = await import('#src/lib/state.ts')
+    const {contextMenuStore} = await import('#src/lib/contextMenu.ts')
+    const {exportDialogStore} = await import('#src/lib/exporting.ts')
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [{
+        id: 'ingredient-1',
+        assetId: 'missing-1',
+        index: 1,
+        name: 'Image 1',
+        kind: 'import' as const,
+        thumbnail: 'data:image/webp;base64,AAAA',
+        createdAt: 0,
+      }],
+      nextIngredientIndex: 2,
+    }))
+    const {container} = await renderComponent('Ingredients')
+    const menu = await renderComponent('ContextMenu')
+    fireEvent.contextMenu(container.querySelector('[data-testid="ingredient"]')!, {
+      clientX: 20,
+      clientY: 20,
+    })
+    expect(contextMenuStore.state.collectionIndex).toBe(1)
+    const items = () => [...menu.container.querySelectorAll('[role="menuitem"]')].map(item => item.textContent)
+    expect(items()).toEqual(['Export'])
+    act(() => contextMenuStore.set({open: false}))
+    fireEvent.contextMenu(container.querySelector('[data-testid="frame-view"]')!)
+    expect(contextMenuStore.state.collectionIndex).toBe(0)
+    expect(items()).toEqual(['Export…'])
+    // Without visible artwork there is nothing to export.
+    expect(menu.container.querySelector<HTMLButtonElement>('[role="menuitem"]')?.disabled).toBe(true)
+    act(() => contextMenuStore.set({open: false}))
+    expect(exportDialogStore.state.open).toBe(false)
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [],
+    }))
+  })
+  test('the canvas context menu has no Export entry', async () => {
+    const {openContextMenu, closeContextMenu} = await import('#src/lib/contextMenu.ts')
+    const menu = await renderComponent('ContextMenu')
+    act(() => openContextMenu(10, 10))
+    const items = [...menu.container.querySelectorAll('[role="menuitem"]')].map(item => item.textContent)
+    expect(items).toContain('Frame all artwork')
+    expect(items.some(item => /export/i.test(item ?? ''))).toBe(false)
+    act(() => closeContextMenu())
   })
 })

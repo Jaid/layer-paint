@@ -1,14 +1,16 @@
 import type {Rect, Size} from './geometry.ts'
 import type {ExportFormat} from './image.ts'
-import type {Layer} from './state.ts'
+import type {Ingredient, Layer} from './state.ts'
 
 import {assets} from './assets.ts'
 import {getContentBounds, renderRegion} from './composite.ts'
+import {getGenerationRegion} from './generationRegion.ts'
 import {rectIntersection} from './geometry.ts'
 import {encodeCanvas, MAX_EDGE, MAX_PIXELS} from './image.ts'
 import {getContentRect, getLayerBounds} from './layerGeometry.ts'
 import {getErrorMessage, notify} from './notices.ts'
 import {editorStore, projectStore} from './state.ts'
+import {Store} from './store/index.ts'
 
 export type ExportScope = 'content' | 'frame'
 export type ExportPolicy = {
@@ -72,7 +74,8 @@ export function getExportPlan(layers: ReadonlyArray<Layer>, region: Rect, policy
   }
 }
 export const getExportSize = (layers: ReadonlyArray<Layer>, region: Rect): Size => getExportPlan(layers, region)
-export const getExportRegion = (scope: ExportScope) => (scope === 'frame' ? editorStore.state.frame : getContentBounds(projectStore.state.layers))
+/** “frame” is the region `![0]` shows: the frame, or all artwork while the frame is off */
+export const getExportRegion = (scope: ExportScope) => (scope === 'frame' ? getGenerationRegion(editorStore.state, projectStore.state.layers).frame : getContentBounds(projectStore.state.layers))
 export const currentExportPolicy = (): ExportPolicy => ({
   mode: editorStore.state.exportMode,
   scale: editorStore.state.exportScale,
@@ -122,5 +125,49 @@ export async function copyImage(scope: ExportScope, policy?: ExportPolicy) {
     notify('success', 'PNG copied to clipboard.')
   } catch (error) {
     notify('error', `Could not copy: ${getErrorMessage(error)}`)
+  }
+}
+
+/** The raster export dialog is opened from the context menu of the frame view in the collection. */
+export const exportDialogStore = new Store<{
+  /** explicit permission to export below full detail when the plan exceeds the pixel limits */
+  allowDownsample: boolean
+  open: boolean
+  scope: ExportScope
+}>({
+  allowDownsample: false,
+  open: false,
+  scope: 'frame',
+})
+export const openExportDialog = (scope: ExportScope = 'frame') => exportDialogStore.set({
+  allowDownsample: false,
+  open: true,
+  scope,
+})
+export const closeExportDialog = () => exportDialogStore.set({open: false})
+
+const mediaTypeExtensions: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/svg+xml': 'svg',
+  'image/x-icon': 'ico',
+}
+export const getExtension = (mediaType: string) => mediaTypeExtensions[mediaType] ?? (/^image\/([\da-z]+)$/.exec(mediaType)?.[1] ?? 'png')
+/** a file name without characters that common file systems reject, or undefined if nothing usable remains */
+export const sanitizeFileName = (name: string) => {
+  const cleaned = name.replaceAll(/[\u{0}-\u{1F}"*/:<>?\\|]+/gu, ' ').replaceAll(/\s+/g, ' ').trim().replace(/^\.+/, '').slice(0, 100).trim()
+  return cleaned || undefined
+}
+export const getIngredientFileName = (ingredient: Pick<Ingredient, 'index' | 'name'>, mediaType: string) => `${sanitizeFileName(ingredient.name) ?? `layerpaint_${ingredient.index}`}.${getExtension(mediaType)}`
+/** Saves the original bytes of a collection image, so nothing is re-encoded. */
+export function exportIngredient(ingredient: Ingredient) {
+  try {
+    const asset = assets.get(ingredient.assetId)
+    if (!asset) {
+      throw new Error(`The image of ![${ingredient.index}] is not loaded.`)
+    }
+    downloadBlob(asset.blob, getIngredientFileName(ingredient, asset.blob.type))
+    notify('success', `![${ingredient.index}] exported.`)
+  } catch (error) {
+    notify('error', getErrorMessage(error))
   }
 }
