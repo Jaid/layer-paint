@@ -107,6 +107,10 @@ describe('models', () => {
       'bytedance-seed/seedream-5-0-pro',
     ])
   })
+  test('Nano Banana 2.1 is the default model', () => {
+    expect(defaultModel.id).toBe('google/gemini-nano-banana-2.1')
+    expect(getModel(undefined).title).toBe('Nano Banana 2.1')
+  })
   test('models resolve with or without vendor prefix', () => {
     expect(findModel('gemini-3.1-flash-image')?.id).toBe('google/gemini-3.1-flash-image')
     expect(findModel('gpt-image-2.5-sunburst')?.id).toBe('openai/gpt-image-2.5-sunburst')
@@ -219,6 +223,43 @@ describe('prompt', () => {
       text: 'extend',
     })
     expect(compiled.text).toContain('gray')
+  })
+  test('descriptions are written directly before the image', () => {
+    const compiled = compilePrompt({
+      ...base,
+      hasCanvasContent: true,
+      text: 'Please add ![2](this witch) to the image',
+    })
+    expect(compiled.errors).toEqual([])
+    expect(compiled.sources).toEqual([{kind: 'canvas'}, {
+      kind: 'ingredient',
+      index: 2,
+    }])
+    expect(compiled.text).toContain('Please add this witch [Image 2] to the image')
+  })
+  test('described references are found with their description and ranges', () => {
+    const text = 'a ![1](the (tall) tower) b ![2]( spaced \\) out ) c ![0](this scene)'
+    const tokens = findReferences(text)
+    expect(tokens.map(token => [token.index, token.description])).toEqual([[1, 'the (tall) tower'], [2, 'spaced ) out'], [0, 'this scene']])
+    expect(text.slice(tokens[0].start, tokens[0].referenceEnd)).toBe('![1]')
+    expect(text.slice(tokens[0].start, tokens[0].end)).toBe('![1](the (tall) tower)')
+  })
+  test('empty descriptions behave like bare references', () => {
+    const [token] = findReferences('![1]()')
+    expect(token.description).toBeUndefined()
+    expect(compilePrompt({
+      ...base,
+      hasCanvasContent: false,
+      text: 'Show ![1]() please',
+    }).text).toContain('Show [Image 1] please')
+  })
+  test('Markdown image destinations stay literal and are never fetched', () => {
+    for (const text of ['![2](https://example.invalid/a.png)', '![2](./a.png)', '![2](logo.png "Logo")', '![2](</a b.png>)', '![2](data:image/png;base64,AAAA)']) {
+      expect(findReferences(text)).toEqual([])
+    }
+  })
+  test('unterminated descriptions fall back to a bare reference', () => {
+    expect(findReferences('![1](never closed').map(token => [token.index, token.description])).toEqual([[1, undefined]])
   })
   test('HTML comments are stripped', () => {
     expect(stripComments('a <!-- note ![9] --> b')).toBe('a  b')
