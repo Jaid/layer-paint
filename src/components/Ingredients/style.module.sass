@@ -8,21 +8,17 @@
   padding: 8px
 
 .grid
+  --tile-height: 76px
   display: flex
+  flex-wrap: wrap
   align-items: flex-start
   gap: 6px
-
-.column
-  display: flex
-  flex: 1 1 0
-  flex-direction: column
-  gap: 6px
-  min-width: 0
 
 .tile
   --kind: #e0a0bc
   position: relative
-  width: 100%
+  flex: none
+  height: var(--tile-height)
   border-radius: 6px
   overflow: hidden
   background: repeating-conic-gradient(#7773 0 25%, transparent 0 50%) 0 0 / 10px 10px
@@ -42,6 +38,35 @@
     cursor: grabbing
   &:hover .remove, &:focus-within .remove
     opacity: 1
+  // tiny triangles on the edges where the thumbnail is cropped, kept clear of the number badge
+  &[data-crop]::before, &[data-crop]::after
+    --arrow: rgb(255 255 255 / 90%)
+    content: ''
+    position: absolute
+    z-index: 1
+    width: 0
+    height: 0
+    border: 0 solid transparent
+    filter: drop-shadow(0 0 1px rgb(0 0 0 / 90%))
+    pointer-events: none
+  &[data-crop=vertical]::before, &[data-crop=vertical]::after
+    left: calc(50% - 4px)
+    border-inline-width: 4px
+  &[data-crop=vertical]::before
+    top: 1px
+    border-bottom: 3px solid var(--arrow)
+  &[data-crop=vertical]::after
+    bottom: 1px
+    border-top: 3px solid var(--arrow)
+  &[data-crop=horizontal]::before, &[data-crop=horizontal]::after
+    top: calc(50% - 4px)
+    border-block-width: 4px
+  &[data-crop=horizontal]::before
+    left: 1px
+    border-right: 3px solid var(--arrow)
+  &[data-crop=horizontal]::after
+    right: 1px
+    border-left: 3px solid var(--arrow)
 
 .insert
   display: block
@@ -64,6 +89,7 @@
 
 .number
   position: absolute
+  z-index: 1
   left: 4px
   bottom: 4px
   min-width: 18px
@@ -82,6 +108,7 @@
 
 .remove
   position: absolute
+  z-index: 1
   top: 3px
   right: 3px
   display: grid
@@ -111,6 +138,8 @@
 @media (max-width: 1000px)
   .container
     max-height: 22%
+  .grid
+    --tile-height: 64px
 
 @media (max-width: 1000px) and (max-height: 700px)
   .container

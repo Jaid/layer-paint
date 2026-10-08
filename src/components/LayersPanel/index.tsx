@@ -121,25 +121,23 @@ function LayerRow({layer, background, selected}: {
       <IconButton icon={layer.visible ? Eye : EyeOff} size={14} title={layer.visible ? 'Hide layer' : 'Show layer'} onClick={() => updateLayer(layer.id, {visible: !layer.visible})} />
     </div>
     {selected && <div className={css.details}>
-      {!background && <>
+      {editingMask && !background && <>
         <MaskSlider label='Area' layer={layer} property='area' />
         <MaskSlider label='Feather' layer={layer} property='feather' />
-        {editingMask && <>
-          <MaskSlider label='Roundness' layer={layer} property='roundness' />
-          <MaskSlider label='Mask X' layer={layer} min={-100} property='offsetX' />
-          <MaskSlider label='Mask Y' layer={layer} min={-100} property='offsetY' />
-          <label className={css.checkbox}><input checked={Boolean(layer.featherAllEdges)} type='checkbox' onChange={event => updateLayer(layer.id, {featherAllEdges: event.currentTarget.checked})} />Feather exposed edges too</label>
-          <p className={css.note}>Drag the mask on the canvas to reposition it. By default, feathering blends overlaps and preserves exposed outer edges.</p>
-          <button
-            type='button' onClick={() => updateLayer(layer.id, {
-              ...layer.kind === 'generated' ? defaultGeneratedMask : defaultImportedMask,
-              offsetX: 0,
-              offsetY: 0,
-              roundness: 0,
-              featherAllEdges: false,
-            })}
-          >Reset mask</button>
-        </>}
+        <MaskSlider label='Roundness' layer={layer} property='roundness' />
+        <MaskSlider label='Mask X' layer={layer} min={-100} property='offsetX' />
+        <MaskSlider label='Mask Y' layer={layer} min={-100} property='offsetY' />
+        <label className={css.checkbox}><input checked={Boolean(layer.featherAllEdges)} type='checkbox' onChange={event => updateLayer(layer.id, {featherAllEdges: event.currentTarget.checked})} />Feather exposed edges too</label>
+        <p className={css.note}>Drag the mask on the canvas to reposition it. By default, feathering blends overlaps and preserves exposed outer edges.</p>
+        <button
+          type='button' onClick={() => updateLayer(layer.id, {
+            ...layer.kind === 'generated' ? defaultGeneratedMask : defaultImportedMask,
+            offsetX: 0,
+            offsetY: 0,
+            roundness: 0,
+            featherAllEdges: false,
+          })}
+        >Reset mask</button>
       </>}
       {background && <p className={css.note}>The bottom layer is the unmasked base.</p>}
       {layer.kind === 'import' && <>
