@@ -114,7 +114,7 @@ describe('components', () => {
     expect(header.querySelector('nav[aria-label="Project actions"]')).not.toBeNull()
     expect(header.querySelector('h1')).not.toBeNull()
   })
-  test('LayersPanel shows mask sliders only for non-background layers', async () => {
+  test('LayersPanel shows mask sliders only while editing the mask of a non-background layer', async () => {
     const {projectStore, editorStore, defaultGeneratedMask} = await import('#src/lib/state.ts')
     const rect = {
       x: 0,
@@ -155,7 +155,9 @@ describe('components', () => {
     expect(container.querySelector('[role="group"]')).toBeNull()
     expect(container.querySelector('footer')).toBeNull()
     expect(container.textContent).not.toMatch(/Undo|Redo/)
-    expect(container.querySelectorAll('input[type="range"]')).toHaveLength(2)
+    // Selecting the image itself shows no mask controls.
+    expect(container.querySelectorAll('input[type="range"]')).toHaveLength(0)
+    expect(container.textContent).not.toMatch(/Area|Feather/)
     expect(defaultGeneratedMask).toEqual({
       area: 1,
       feather: 0,
@@ -169,8 +171,11 @@ describe('components', () => {
     expect(editorStore.state.tool).toBe('mask')
     expect(maskThumbnails[0].getAttribute('aria-pressed')).toBe('true')
     expect(container.querySelectorAll('input[type="range"]')).toHaveLength(5)
+    expect(container.textContent).toContain('Area')
+    expect(container.textContent).toContain('Feather')
     act(() => maskThumbnails[0].click())
     expect(editorStore.state.tool).toBe('frame')
+    expect(container.querySelectorAll('input[type="range"]')).toHaveLength(0)
     act(() => editorStore.set({selectedLayerId: 'a'}))
     const second = await renderComponent('LayersPanel')
     expect(second.container.querySelectorAll('input[type="range"]')).toHaveLength(0)

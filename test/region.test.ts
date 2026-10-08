@@ -4,8 +4,8 @@ import {describe, expect, test} from 'bun:test'
 
 import {withIngredient, withLayerIngredients} from '#src/lib/actions.ts'
 import {getContentRegion, getGenerationMode, getGenerationRegion, hasContentOutside} from '#src/lib/generationRegion.ts'
-import {layoutMasonry} from '#src/lib/masonry.ts'
 import {parseProjectDocument} from '#src/lib/projectSchema.ts'
+import {getThumbnailFit, maxThumbnailAspect, minThumbnailAspect} from '#src/lib/thumbnailFit.ts'
 
 const layer = (id: string, rect: Layer['rect'], extra: Partial<Layer> = {}): Layer => ({
   id,
@@ -186,13 +186,29 @@ describe('collection numbering', () => {
     }).layersNumbered).toBeUndefined()
   })
 })
-describe('masonry', () => {
-  test('items go into the shortest column', () => {
-    const items = [{id: 'a', aspect: 2}, {id: 'b', aspect: 0.5}, {id: 'c', aspect: 0.5}, {id: 'd', aspect: 1}]
-    const columns = layoutMasonry(items, 2, item => item.aspect).map(column => column.map(item => item.id))
-    expect(columns).toEqual([['a'], ['b', 'c', 'd']])
+describe('collection thumbnails', () => {
+  test('moderate aspects keep the whole image', () => {
+    expect(getThumbnailFit(300, 200)).toEqual({aspect: 1.5})
+    expect(getThumbnailFit(200, 300)).toEqual({aspect: 2 / 3})
+    expect(getThumbnailFit(400, 200)).toEqual({aspect: 2})
   })
-  test('there is always at least one column', () => {
-    expect(layoutMasonry([1, 2], 0, () => 1)).toEqual([[1, 2]])
+  test('very tall images are cropped to 2:3 with top and bottom marked', () => {
+    expect(getThumbnailFit(48, 192)).toEqual({
+      aspect: minThumbnailAspect,
+      crop: 'vertical',
+    })
+  })
+  test('very wide images are cropped to 2:1 with left and right marked', () => {
+    expect(getThumbnailFit(1000, 200)).toEqual({
+      aspect: maxThumbnailAspect,
+      crop: 'horizontal',
+    })
+  })
+  test('rounding noise just past a limit is not flagged as a crop', () => {
+    expect(getThumbnailFit(2010, 1000)).toEqual({aspect: maxThumbnailAspect})
+    expect(getThumbnailFit(1000, 1505)).toEqual({aspect: minThumbnailAspect})
+  })
+  test('unknown dimensions fall back to a square', () => {
+    expect(getThumbnailFit(0, 0)).toEqual({aspect: 1})
   })
 })
