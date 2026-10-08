@@ -211,15 +211,17 @@ export default function Viewport() {
     }
     const corner = target.closest<HTMLElement>('[data-corner]')?.dataset.corner as Corner | undefined
     const edge = target.closest<HTMLElement>('[data-edge]')?.dataset.edge as FrameEdge | undefined
-    if (state.tool === 'frame' && state.frameEnabled && corner) {
+    // With no artwork the frame is locked: it can neither be moved nor scaled.
+    const frameEditable = state.tool === 'frame' && state.frameEnabled && projectStore.state.layers.length > 0
+    if (frameEditable && corner) {
       begin(event, 'frame-resize', undefined, corner); return
     }
-    if (state.tool === 'frame' && state.frameEnabled && edge) {
+    if (frameEditable && edge) {
       begin(event, 'frame-edge', undefined, undefined, edge); return
     }
     const hit = findLayerAt(projectStore.state.layers, world)
     // With no artwork there is nothing to frame, so a press inside the frame pans instead of moving it.
-    if (state.tool !== 'frame' || !state.frameEnabled || event.ctrlKey || event.metaKey || event.altKey || !projectStore.state.layers.length || !rectContains(state.frame, world)) {
+    if (!frameEditable || event.ctrlKey || event.metaKey || event.altKey || !rectContains(state.frame, world)) {
       selectLayer(hit?.id ?? null)
       if (hit?.kind === 'import' && state.tool !== 'mask') {
         begin(event, 'image-move', hit); return
@@ -242,7 +244,7 @@ export default function Viewport() {
         height: frame.height + distance * 2,
       }
       const near = rectContains(expanded, point) && (Math.min(Math.abs(point.x - frame.x), Math.abs(point.x - frame.x - frame.width)) <= distance || Math.min(Math.abs(point.y - frame.y), Math.abs(point.y - frame.y - frame.height)) <= distance)
-      setFrameTouched(near && state.frameEnabled)
+      setFrameTouched(near && state.frameEnabled && projectStore.state.layers.length > 0)
       const hit = findLayerAt(projectStore.state.layers, world)
       if (state.hoveredLayerId !== (hit?.id ?? null)) {
         editorStore.set({hoveredLayerId: hit?.id ?? null})
@@ -380,7 +382,8 @@ export default function Viewport() {
   const outlined = layers.filter(layer => layer.visible && (layer.id === selectedLayerId || layer.id === hoveredLayerId))
   const frameScreen = toScreenRect(view, frame)
   const grid = 32 * 2 ** Math.round(Math.log2(1 / view.scale)) * view.scale
-  const handles = tool === 'frame' && (frameTouched || Boolean(dragKind?.startsWith('frame')))
+  const frameLocked = !layers.length
+  const handles = tool === 'frame' && !frameLocked && (frameTouched || Boolean(dragKind?.startsWith('frame')))
   return <div
     className={clsx(css.viewport, dragKind && css.dragging)} aria-label='Canvas' data-testid='viewport' data-tool={tool} data-viewport role='application' style={{
       cursor: dragKind === 'pan' ? 'grabbing' : space ? 'grab' : tool === 'mask' ? 'move' : undefined,
@@ -419,7 +422,7 @@ export default function Viewport() {
     {outlined.map(layer => <LayerOutline key={layer.id} layer={layer} masked={layers[0]?.id !== layer.id} transform={layer.id === selectedLayerId && layer.kind === 'import' && tool === 'image'} view={view} />)}
     {jobs.map(job => <JobOverlay key={job.id} job={job} rect={toScreenRect(view, job.rect)} />)}
     {tool !== 'mask' && frameEnabled && <div className={clsx(css.frame, handles && css.handlesVisible, editor.generationHover && css.charged, dragKind?.startsWith('frame') && css.activeFrame)} data-testid='frame' style={rectStyle(frameScreen)}>
-      {tool === 'frame' && <>
+      {tool === 'frame' && !frameLocked && <>
         {corners.map(corner => <div key={corner} className={clsx(css.handle, css[corner])} data-corner={corner} title='Resize frame; aspect ratio stays locked' />)}
         {(['n', 'e', 's', 'w'] as const).map(edge => <div key={edge} className={clsx(css.edgeHandle, css[edge])} data-edge={edge} title='Drag to snap between model-supported aspect ratios' />)}
       </>}
