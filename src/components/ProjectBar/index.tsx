@@ -3,7 +3,6 @@ import type {Theme} from '#src/lib/theme.ts'
 // Browser UI source. Project replacement only occurs after the user confirms it in the dialog.
 import {useRef, useState} from 'react'
 
-import {ExportMenu} from '#component/CanvasToolbar'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
 import {useStore} from '#src/lib/store/index.ts'
 import {applyTheme, themeStore} from '#src/lib/theme.ts'
@@ -29,7 +28,6 @@ export default function ProjectBar() {
     <button disabled={busy} title='Start an empty project' type='button' onClick={() => confirmation.current?.showModal()}>New</button>
     <button disabled={busy} title='Open an editable project' type='button' onClick={() => input.current?.click()}>Open</button>
     <button disabled={busy} title='Save an editable copy with original images' type='button' onClick={() => void run(savePortableProject)}>Save project</button>
-    <ExportMenu />
     <select aria-label='Color scheme' value={theme} onChange={event => applyTheme(event.currentTarget.value as Theme)}><option value='dark'>Dark</option><option value='light'>Light</option><option value='system'>System</option></select>
     <input
       accept='.layerpaint' aria-label='Open project file' hidden type='file' ref={input} onChange={event => {

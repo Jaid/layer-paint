@@ -186,6 +186,60 @@ try {
     assert.equal(await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length), layers)
   })
 
+  await check('The frame view at position 0 follows the frame live; collection items export from their context menu', async () => {
+    const sample = () => page.$eval('[data-testid="frame-view"] canvas', node => {
+      const canvas = node as HTMLCanvasElement, {data} = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height)
+      let sum = 0; for (let i = 0; i < data.length; i += 4) sum += data[i] + data[i + 1] * 3 + data[i + 2] * 7 + data[i + 3] * 11
+      return {width: canvas.width, height: canvas.height, sum}
+    })
+    const first = await page.$eval('[data-testid="ingredients"] [data-index]', node => (node as HTMLElement).dataset.index)
+    assert.equal(first, '0', 'The frame view must be the first collection tile')
+    const frame = await page.evaluate(() => ({...globalThis.layerPaint!.editorStore.state.frame}))
+    await page.evaluate(() => globalThis.layerPaint!.actions.fitFrameToContent()); await settle(); await settle()
+    const before = await sample()
+    assert.ok(before.width > 0 && before.height > 0 && before.sum > 0, 'The frame view shows the artwork inside the frame')
+    // Moving the frame half its width changes the view without any further interaction.
+    await page.evaluate(() => {const {frame} = globalThis.layerPaint!.editorStore.state; globalThis.layerPaint!.editorStore.set({frame: {...frame, x: frame.x + frame.width / 2}})}); await settle(); await settle()
+    const moved = await sample()
+    assert.notEqual(moved.sum, before.sum, 'The frame view must update while the frame moves')
+    // Hiding a layer updates it as well.
+    const firstLayer = await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers[0].id)
+    await page.evaluate(id => globalThis.layerPaint!.actions.updateLayer(id, {visible: false}), firstLayer); await settle(); await settle()
+    assert.notEqual((await sample()).sum, moved.sum, 'The frame view must update when the artwork changes')
+    await page.evaluate(() => globalThis.layerPaint!.actions.undo())
+    await page.evaluate(value => globalThis.layerPaint!.editorStore.set({frame: value}), frame); await settle()
+    // Collection images download their original bytes.
+    await page.evaluate(() => {
+      const downloads: Array<{name: string; href: string}> = [], click = HTMLAnchorElement.prototype.click
+      Object.assign(globalThis, {downloads, restoreClick: () => {HTMLAnchorElement.prototype.click = click}})
+      HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {downloads.push({name: this.download, href: this.href})}
+    })
+    await page.click('[data-testid="ingredient"][data-index="1"] button', {button: 'right'})
+    await page.waitForSelector('[role="menu"][aria-label="Collection context menu"]')
+    assert.deepEqual(await page.$$eval('[role="menu"] [role="menuitem"]', nodes => nodes.map(node => node.textContent)), ['Export'])
+    await button('Export')
+    const download = await page.waitForFunction(() => (globalThis as unknown as {downloads: Array<{name: string; href: string}>}).downloads[0]).then(handle => handle.jsonValue() as Promise<{name: string; href: string}>)
+    const exported = await page.evaluate(async href => {
+      const h = globalThis.layerPaint!, blob = await (await fetch(href)).blob(), original = h.assets.require(h.projectStore.state.ingredients.find(item => item.index === 1)!.assetId).blob
+      const [a, b] = [await blob.bytes(), await original.bytes()]
+      return {same: a.length === b.length && a.every((byte, i) => byte === b[i]), type: blob.type, originalType: original.type}
+    }, download.href)
+    assert.ok(exported.same, 'Exporting a collection image must keep its original bytes'); assert.equal(exported.type, exported.originalType)
+    assert.match(download.name, /\.(png|jpg|webp|svg|jxl)$/)
+    await page.evaluate(() => (globalThis as unknown as {restoreClick: () => void}).restoreClick())
+    // The frame view opens the raster export dialog, preset to the frame.
+    await page.click('[data-testid="frame-view"] button', {button: 'right'})
+    await page.waitForSelector('[role="menu"][aria-label="Collection context menu"]')
+    await button('Export…')
+    await page.waitForSelector('[data-testid="export-dialog"][open]')
+    assert.equal(await page.$eval('[aria-label="Export region"]', node => (node as HTMLSelectElement).value), 'frame')
+    assert.ok(await page.$eval('[data-testid="export-dialog"]', node => /\d × \d/.test(node.textContent ?? '')))
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => !document.querySelector('[data-testid="export-dialog"][open]'))
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].some(node => node.textContent?.trim() === 'Export')), false, 'There is no permanent Export button')
+  })
+
+
   await check('Right-clicking a layer row opens its context menu; there is no actions button', async () => {
     assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === 'Frame it').length), 0)
     assert.equal(await page.$('[aria-label^="Actions for"]'), null)

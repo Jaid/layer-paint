@@ -5,7 +5,7 @@ import Monacozen from 'monacozen'
 import {useEffect, useRef} from 'react'
 
 import {setPrompt} from '#src/lib/actions.ts'
-import {getDroppedIngredient, getReferenceText, isIngredientDrag} from '#src/lib/collectionDrag.ts'
+import {getDroppedReference, isReferenceDrag} from '#src/lib/collectionDrag.ts'
 import {generate} from '#src/lib/generation.ts'
 import {findReferences} from '#src/lib/prompt.ts'
 import {insertIntoPrompt, registerPromptInserter} from '#src/lib/promptEditor.ts'
@@ -134,7 +134,7 @@ const PromptEditor = () => {
   const monacoRef = useRef<MonacoApi | null>(null)
   const cleanupRef = useRef<(() => void) | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
-  // Collection thumbnails drop as references at the pointer. Capturing keeps Monaco’s own text drop and the file dropzone out of it.
+  // Collection tiles, the frame view included, drop as references at the pointer. Capturing keeps Monaco’s own text drop and the file dropzone out of it.
   useEffect(() => {
     const container = containerRef.current
     if (!container) {
@@ -142,7 +142,7 @@ const PromptEditor = () => {
     }
     const positionAt = (event: DragEvent) => editorRef.current?.getTargetAtClientPoint(event.clientX, event.clientY)?.position
     const over = (event: DragEvent) => {
-      if (!isIngredientDrag(event.dataTransfer)) {
+      if (!isReferenceDrag(event.dataTransfer)) {
         return
       }
       event.preventDefault(); event.stopPropagation()
@@ -156,13 +156,13 @@ const PromptEditor = () => {
       }
     }
     const drop = (event: DragEvent) => {
-      if (!isIngredientDrag(event.dataTransfer)) {
+      if (!isReferenceDrag(event.dataTransfer)) {
         return
       }
       event.preventDefault(); event.stopPropagation()
-      const ingredient = getDroppedIngredient(event.dataTransfer)
-      if (ingredient) {
-        insertIntoPrompt(getReferenceText(ingredient), {
+      const reference = getDroppedReference(event.dataTransfer)
+      if (reference) {
+        insertIntoPrompt(reference, {
           x: event.clientX,
           y: event.clientY,
         })

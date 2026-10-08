@@ -3,8 +3,10 @@ import type {Layer, ProjectDocument} from '#src/lib/state.ts'
 import {describe, expect, test} from 'bun:test'
 
 import {withIngredient, withLayerIngredients} from '#src/lib/actions.ts'
+import {getExportRegion, getIngredientFileName} from '#src/lib/exporting.ts'
 import {getContentRegion, getGenerationMode, getGenerationRegion, hasContentOutside} from '#src/lib/generationRegion.ts'
 import {parseProjectDocument} from '#src/lib/projectSchema.ts'
+import {editorStore, projectStore} from '#src/lib/state.ts'
 import {getThumbnailFit, maxThumbnailAspect, minThumbnailAspect} from '#src/lib/thumbnailFit.ts'
 
 const layer = (id: string, rect: Layer['rect'], extra: Partial<Layer> = {}): Layer => ({
@@ -210,5 +212,45 @@ describe('collection thumbnails', () => {
   })
   test('unknown dimensions fall back to a square', () => {
     expect(getThumbnailFit(0, 0)).toEqual({aspect: 1})
+  })
+})
+describe('collection export', () => {
+  test('file names follow the item name and its original format', () => {
+    expect(getIngredientFileName({index: 3, name: 'red'}, 'image/png')).toBe('red.png')
+    expect(getIngredientFileName({index: 3, name: 'a/b: "c"?'}, 'image/jpeg')).toBe('a b c.jpg')
+    expect(getIngredientFileName({index: 4, name: '…'}, 'image/webp')).toBe('….webp')
+    expect(getIngredientFileName({index: 5, name: ' / '}, 'image/svg+xml')).toBe('layerpaint_5.svg')
+    expect(getIngredientFileName({index: 6, name: '..hidden'}, 'image/jxl')).toBe('hidden.jxl')
+  })
+  test('the frame export region is what ![0] shows, also while the frame is off', () => {
+    const frame = {
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    }
+    projectStore.reset({
+      layers: [layer('wide', {
+        x: 0,
+        y: 0,
+        width: 300,
+        height: 100,
+      })],
+      ingredients: [],
+    })
+    editorStore.set({
+      frame,
+      frameEnabled: true,
+    })
+    expect(getExportRegion('frame')).toEqual(frame)
+    editorStore.set({frameEnabled: false})
+    const region = getExportRegion('frame')!
+    expect(region.width / region.height).toBeGreaterThan(2)
+    expect(region.width).toBeGreaterThanOrEqual(300)
+    editorStore.set({frameEnabled: true})
+    projectStore.reset({
+      layers: [],
+      ingredients: [],
+    })
   })
 })

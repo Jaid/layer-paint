@@ -38,7 +38,7 @@ For a static deployment, the key popover accepts a browser-session key. This key
 3. Move the generation frame to the region you want to edit. Corner handles preserve its ratio. Edge handles snap between ratios advertised by the selected model. Handles appear when the pointer touches the frame. While the canvas has no layers, the frame can be neither moved nor scaled; dragging inside it pans the view instead.
 4. Write a prompt and press the yellow button, or press **Ctrl+Enter**. A generation captures its input images, prompt, model settings and frame before the request is sent. Moving the frame while it runs cannot change where the result lands.
 5. New layers start with a 100% area and no feather, and they are not selected automatically. Click the mask thumbnail next to a layer’s image thumbnail to enter mask edit mode, which hides the generation frame and provides **Area**, **Feather**, roundness and mask translation. Selecting the image thumbnail shows only image-related controls: **Brightness**, **Contrast**, **Gamma**, **Saturation**, **Vibrance** and **White balance** sliders (double-click one to reset it) and, for generations, **Content-aware alignment**. Dragging inside the selected layer repositions its mask; clicking the mask thumbnail again or pressing Escape leaves the mode.
-6. Continue with further local edits, then use **Export** for PNG, JPG, WebP or a PNG clipboard copy. Use **Save project** for an editable `.layerpaint` backup containing the source assets and request captures.
+6. Continue with further local edits, then right-click the frame view (tile 0 of the collection) and choose **Export…** for PNG, JPG, WebP or a PNG clipboard copy. Use **Save project** for an editable `.layerpaint` backup containing the source assets and request captures.
 
 ### The generate button and the frame toggle
 
@@ -95,7 +95,9 @@ Use the **Image** tool to drag imports, resize from a corner or rotate from the 
 
 Right-click the canvas, a layer or a row in the layer inspector for **Frame it**, visibility, ordering, deletion, framing, zoom, import, snapshot and undo/redo actions. There is no permanent floating canvas toolbar. Double-clicking a layer also frames it.
 
-The collection below the editor is a row-wrapping strip of equally tall thumbnails, each tagged with its number. Thumbnails keep the image’s aspect ratio between 2:3 and 2:1; taller or wider images are cropped, which tiny arrows on the cropped edges indicate. Click a thumbnail to insert its reference at the cursor, drag it into the editor to insert the reference where you drop it, or drag it onto the canvas to place a movable copy there. The badge color tells the kind apart: pink for imports, green for generations and orange for canvas snapshots (**Snapshot the frame into collection** in the canvas context menu). `![0]` always refers to the live canvas inside the frame and is not part of the collection.
+The collection below the editor is a row-wrapping strip of equally tall thumbnails, each tagged with its number. Position 0 is a live view of `![0]` – the canvas inside the frame, or the generation area while the frame is off – which updates as the frame or the artwork changes. It can be clicked or dragged into the prompt like any other tile, but not removed or placed on the canvas. Thumbnails keep the image’s aspect ratio between 2:3 and 2:1; taller or wider images are cropped, which tiny arrows on the cropped edges indicate. Click a thumbnail to insert its reference at the cursor, drag it into the editor to insert the reference where you drop it, or drag it onto the canvas to place a movable copy there. The badge color tells the kind apart: pink for imports, green for generations and orange for canvas snapshots (**Snapshot the frame into collection** in the canvas context menu). `![0]` always refers to the live canvas inside the frame; its tile is a view, not a stored collection item.
+
+Right-click a tile for **Export**. A collection image downloads with its original bytes, unchanged. The frame view opens the raster export dialog described below, preset to the frame region.
 
 ### Masks and outpainting
 
@@ -116,7 +118,7 @@ Hovering or selecting a layer reveals its image bounds. Contracted masks add a s
 
 **Preserve the highest local detail** considers every relevant layer, including small high-resolution patches. It does not ignore a repair merely because the repair covers a small fraction of the canvas.
 
-The export dialog also provides canvas-scale and custom-scale modes. It displays dimensions and megapixels before export. When full detail exceeds 64 megapixels or a 16,384-pixel edge, the app requires an explicit smaller scale/frame or permission to reduce the output. It does not silently discard local detail.
+The export dialog – opened through **Export…** in the frame view’s context menu – can export the frame or all visible artwork. It also provides canvas-scale and custom-scale modes. It displays dimensions and megapixels before export. When full detail exceeds 64 megapixels or a 16,384-pixel edge, the app requires an explicit smaller scale/frame or permission to reduce the output. It does not silently discard local detail.
 
 A portable project preserves editable normalized assets, geometry, masks, references and original request/output captures. Raster exports are flattened. This edition does not claim to vectorize generated images.
 

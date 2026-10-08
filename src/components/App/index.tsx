@@ -3,6 +3,7 @@ import {Group, Panel, Separator} from 'react-resizable-panels'
 
 import ContextMenu from '#component/ContextMenu'
 import DropOverlay from '#component/DropOverlay'
+import ExportDialog from '#component/ExportDialog'
 import LayersPanel from '#component/LayersPanel'
 import Notices from '#component/Notices'
 import PromptPanel from '#component/PromptPanel'
@@ -64,5 +65,6 @@ export default function App() {
     </div>
     {!hydrated && <div className={css.loading} role='status'>Opening your workspace…</div>}
     <ContextMenu />
+    <ExportDialog />
   </div>
 }
