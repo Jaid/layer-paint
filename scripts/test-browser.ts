@@ -646,6 +646,105 @@ try {
     assert.equal(await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.length), 2)
   })
 
+  await check('Rotating and flipping a collection entry keeps every layer of it in sync, losslessly and undoably', async () => {
+    const setup = await page.evaluate(async () => {
+      const h = globalThis.layerPaint!
+      await h.newProject()
+      // Every pixel of the 6 × 4 source has its own opaque color.
+      const canvas = new OffscreenCanvas(6, 4), ctx = canvas.getContext('2d')!, pixels = ctx.createImageData(6, 4)
+      for (let i = 0; i < 24; i++) pixels.data.set([i * 10, 255 - i * 10, (i * 37) % 256, 255], i * 4)
+      ctx.putImageData(pixels, 0, 0)
+      await h.actions.importLayers([new File([await canvas.convertToBlob({type: 'image/png'})], 'pattern.png', {type: 'image/png'})])
+      const layer = h.projectStore.state.layers[0]
+      h.actions.addLayer({...layer, id: 'pattern-copy', rotation: 30, rect: {x: 100, y: 50, width: 60, height: 40}})
+      h.actions.fitViewToContent()
+      const ingredient = h.projectStore.state.ingredients[0]
+      return {sourceAssetId: ingredient.assetId, thumbnail: ingredient.thumbnail, index: ingredient.index, rects: h.projectStore.state.layers.map(item => ({...item.rect}))}
+    })
+    const state = () => page.evaluate(async () => {
+      const h = globalThis.layerPaint!, doc = h.projectStore.state, ingredient = doc.ingredients[0], asset = h.assets.require(ingredient.assetId)
+      const read = (bitmap: ImageBitmap) => {const canvas = new OffscreenCanvas(bitmap.width, bitmap.height), ctx = canvas.getContext('2d')!; ctx.drawImage(bitmap, 0, 0); return [...ctx.getImageData(0, 0, bitmap.width, bitmap.height).data]}
+      const decoded = await createImageBitmap(asset.blob)
+      return {
+        ingredient: {assetId: ingredient.assetId, sourceAssetId: ingredient.sourceAssetId, rotation: ingredient.rotation, flip: ingredient.flip, thumbnail: ingredient.thumbnail},
+        layers: doc.layers.map(item => ({assetId: item.assetId, rect: {...item.rect}, rotation: item.rotation ?? 0})),
+        type: asset.blob.type, width: asset.width, height: asset.height,
+        pixels: read(decoded), source: ingredient.sourceAssetId ? read(h.assets.require(ingredient.sourceAssetId).bitmap) : undefined,
+      }
+    })
+    const swapped = (rect: {x: number; y: number; width: number; height: number}) => ({x: rect.x + (rect.width - rect.height) / 2, y: rect.y + (rect.height - rect.width) / 2, width: rect.height, height: rect.width})
+    const openMenu = async () => {
+      await page.click(`[data-testid="ingredient"][data-index="${setup.index}"] button`, {button: 'right'})
+      await page.waitForSelector('[role="menu"][aria-label="Collection context menu"] [data-testid="collection-rotation"]:not(:disabled)')
+    }
+    const closeMenu = async () => {
+      await page.focus('[data-testid="collection-rotation"]'); await page.keyboard.press('Escape')
+      await page.waitForFunction(() => !document.querySelector('[role="menu"]'))
+    }
+    await openMenu()
+    assert.deepEqual(await page.$eval('[data-testid="collection-rotation"]', node => [...(node as HTMLSelectElement).options].map(option => option.textContent)), ['0°', '90° clockwise', '90° counterclockwise', '180°'])
+    assert.deepEqual(await page.$eval('[data-testid="collection-flip"]', node => [...(node as HTMLSelectElement).options].map(option => option.textContent)), ['None', 'Horizontal', 'Vertical', 'Both'])
+    await page.select('[data-testid="collection-rotation"]', '90')
+    await page.waitForFunction(() => globalThis.layerPaint!.projectStore.state.ingredients[0].rotation === 90)
+    // The menu stays open, so the flip can be set right away.
+    await page.select('[data-testid="collection-flip"]', 'horizontal')
+    await page.waitForFunction(() => globalThis.layerPaint!.projectStore.state.ingredients[0].flip === 'horizontal')
+    const turned = await state()
+    assert.equal(turned.ingredient.sourceAssetId, setup.sourceAssetId)
+    assert.notEqual(turned.ingredient.assetId, setup.sourceAssetId)
+    assert.notEqual(turned.ingredient.thumbnail, setup.thumbnail, 'The thumbnail shows the new orientation')
+    assert.equal(turned.type, 'image/webp'); assert.equal(turned.width, 4); assert.equal(turned.height, 6)
+    // A clockwise quarter turn followed by a horizontal mirror transposes the picture, pixel-exactly.
+    const expected = Array.from({length: 24}, (_, i) => {const x = i % 4, y = Math.floor(i / 4), from = (x * 6 + y) * 4; return turned.source!.slice(from, from + 4)}).flat()
+    assert.deepEqual(turned.pixels, expected, 'The stored pixels must be exactly the transformed original')
+    assert.ok(turned.layers.every(item => item.assetId === turned.ingredient.assetId), 'Every layer of the entry shows the transformed image')
+    assert.deepEqual(turned.layers.map(item => item.rect), setup.rects.map(swapped), 'Quarter turns turn the layer rects around their centers')
+    assert.deepEqual(turned.layers.map(item => item.rotation), [0, 30], 'Layer rotations stay independent')
+    assert.equal(await page.$eval('[data-testid="collection-rotation"]', node => (node as HTMLSelectElement).value), '90')
+    assert.equal(await page.$eval('[data-testid="collection-flip"]', node => (node as HTMLSelectElement).value), 'horizontal')
+    await closeMenu()
+    // Each choice is one undo step.
+    await page.evaluate(() => globalThis.layerPaint!.actions.undo())
+    assert.deepEqual(await page.evaluate(() => {const ingredient = globalThis.layerPaint!.projectStore.state.ingredients[0]; return [ingredient.rotation, ingredient.flip ?? 'none']}), [90, 'none'])
+    await page.evaluate(() => globalThis.layerPaint!.actions.undo())
+    const undone = await state()
+    assert.equal(undone.ingredient.assetId, setup.sourceAssetId); assert.equal(undone.ingredient.sourceAssetId, undefined)
+    assert.deepEqual(undone.layers.map(item => item.rect), setup.rects)
+    await page.evaluate(() => {globalThis.layerPaint!.actions.redo(); globalThis.layerPaint!.actions.redo()})
+    assert.equal((await state()).ingredient.assetId, turned.ingredient.assetId)
+    // Choosing 0° and no flip returns the very original image.
+    await openMenu()
+    await page.select('[data-testid="collection-rotation"]', '0')
+    await page.waitForFunction(() => globalThis.layerPaint!.projectStore.state.ingredients[0].rotation === undefined)
+    await page.select('[data-testid="collection-flip"]', 'none')
+    await page.waitForFunction(() => globalThis.layerPaint!.projectStore.state.ingredients[0].sourceAssetId === undefined)
+    const restored = await state()
+    assert.equal(restored.ingredient.assetId, setup.sourceAssetId)
+    assert.ok(restored.layers.every(item => item.assetId === setup.sourceAssetId))
+    assert.deepEqual(restored.layers.map(item => item.rect), setup.rects)
+    // The orientation survives portable projects and autosave recovery.
+    await page.select('[data-testid="collection-rotation"]', '270')
+    await page.waitForFunction(() => globalThis.layerPaint!.projectStore.state.ingredients[0].rotation === 270)
+    await closeMenu()
+    const reopened = await page.evaluate(async () => {
+      const h = globalThis.layerPaint!
+      await h.openPortableProject(new Blob([await h.serializeProject()], {type: 'application/json'}))
+      await h.flushAutosave()
+      const ingredient = h.projectStore.state.ingredients[0]
+      return {rotation: ingredient.rotation, source: Boolean(ingredient.sourceAssetId && h.assets.has(ingredient.sourceAssetId)), synced: h.projectStore.state.layers.every(layer => layer.assetId === ingredient.assetId)}
+    })
+    assert.deepEqual(reopened, {rotation: 270, source: true, synced: true})
+    await page.reload({waitUntil: 'networkidle0'}); await ready(page)
+    const recovered = await page.evaluate(() => {const h = globalThis.layerPaint!, ingredient = h.projectStore.state.ingredients[0]; return {rotation: ingredient.rotation, width: h.assets.require(ingredient.assetId).width, original: h.assets.require(ingredient.sourceAssetId!).width}})
+    assert.deepEqual(recovered, {rotation: 270, width: 4, original: 6})
+    // Back to 0° after recovery, the original pixels are shown again.
+    await openMenu()
+    await page.select('[data-testid="collection-rotation"]', '0')
+    await page.waitForFunction(() => globalThis.layerPaint!.projectStore.state.ingredients[0].sourceAssetId === undefined)
+    assert.equal(await page.evaluate(() => {const h = globalThis.layerPaint!; return h.assets.require(h.projectStore.state.ingredients[0].assetId).width}), 6)
+    await closeMenu()
+  })
+
   await check('Invalid portable imports leave the current workspace untouched', async () => {
     const result = await page.evaluate(async () => {
       const h = globalThis.layerPaint!, before = h.projectStore.state

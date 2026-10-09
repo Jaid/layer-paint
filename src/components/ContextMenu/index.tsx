@@ -1,12 +1,18 @@
-import {useEffect, useRef} from 'react'
+import type {Flip, Orientation, Rotation} from '#src/lib/orientation.ts'
+import type {Ingredient} from '#src/lib/state.ts'
+
+import {useEffect, useRef, useSyncExternalStore} from 'react'
 
 import {addIngredients, fitFrameToContent, fitFrameToRect, fitViewToContent, fitViewToFrame, importLayers, moveLayerInStack, redo, removeIngredient, removeLayer, selectLayer, undo, updateLayer} from '#src/lib/actions.ts'
+import {assets} from '#src/lib/assets.ts'
 import {closeContextMenu, contextMenuStore} from '#src/lib/contextMenu.ts'
 import {exportIngredient, openExportDialog} from '#src/lib/exporting.ts'
 import {pickImageFiles} from '#src/lib/filePicker.ts'
 import {reroll} from '#src/lib/generation.ts'
+import {getIngredientOrientation, getSourceAssetId, orientationStore, setIngredientOrientation} from '#src/lib/ingredientOrientation.ts'
 import {getLayerBounds} from '#src/lib/layerGeometry.ts'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
+import {flips, flipTitles, rotations, rotationTitles} from '#src/lib/orientation.ts'
 import {insertIntoPrompt} from '#src/lib/promptEditor.ts'
 import {editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
@@ -14,6 +20,17 @@ import {zoomBy} from '#src/lib/viewport.ts'
 import {captureCanvasSnapshot, referenceAsset} from '#src/lib/workspaceIO.ts'
 
 import css from './style.module.sass'
+
+/** everything the arrow keys move between */
+const focusableSelector = 'button:not(:disabled), select:not(:disabled)'
+const subscribeAssets = (listener: () => void) => {
+  const unsubscribeAdded = assets.subscribe(listener)
+  const unsubscribeReleased = assets.subscribeRelease(() => listener())
+  return () => {
+    unsubscribeAdded()
+    unsubscribeReleased()
+  }
+}
 
 export default function ContextMenu() {
   const menu = useStore(contextMenuStore); const ref = useRef<HTMLDivElement>(null)
@@ -26,7 +43,7 @@ export default function ContextMenu() {
       return
     }
     const previous = document.activeElement as HTMLElement | null
-    ref.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
+    ref.current?.querySelector<HTMLElement>(focusableSelector)?.focus()
     const dismiss = (event: PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) {
         closeContextMenu()
@@ -54,7 +71,7 @@ export default function ContextMenu() {
     closeContextMenu(); Promise.resolve().then(action).catch(error => notify('error', getErrorMessage(error)))
   }
   const button = (label: string, action: () => unknown, disabled = false) => <button disabled={disabled} role='menuitem' type='button' onClick={() => run(action)}>{label}</button>
-  const estimatedHeight = collection ? 120 : (layer ? 650 : 420)
+  const estimatedHeight = collection ? 220 : (layer ? 650 : 420)
   return <div
     className={css.menu} aria-label={collection ? 'Collection context menu' : 'Canvas context menu'} data-overlay-control role='menu' style={{
       top: Math.max(8, Math.min(menu.y, innerHeight - estimatedHeight)),
@@ -63,8 +80,8 @@ export default function ContextMenu() {
       if (event.key === 'Escape') {
         event.preventDefault(); closeContextMenu(); return
       }
-      const buttons = [...ref.current!.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
-      const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+      const buttons = [...ref.current!.querySelectorAll<HTMLElement>(focusableSelector)]
+      const index = buttons.indexOf(document.activeElement as HTMLElement)
       if (['ArrowDown', 'ArrowUp', 'End', 'Home'].includes(event.key)) {
         event.preventDefault(); event.stopPropagation()
         const next = event.key === 'Home' ? 0 : (event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length)
@@ -75,6 +92,8 @@ export default function ContextMenu() {
     {collection && <>
       <strong>{collectionItem ? `![${collectionItem.index}] · ${collectionItem.name}` : `![0] · ${frameEnabled ? 'canvas inside the frame' : 'all canvas artwork'}`}</strong>
       {collectionItem ? <>
+        <OrientationRows ingredient={collectionItem} />
+        <hr />
         {button('Export', () => exportIngredient(collectionItem))}
         {button('Delete', () => removeIngredient(collectionItem.id))}
       </> : button('Export…', () => openExportDialog('frame'), !hasArtwork)}
@@ -129,4 +148,32 @@ export default function ContextMenu() {
       {button('Redo · Ctrl+Shift+Z', redo, !projectStore.meta.state.canRedo)}
     </>}
   </div>
+}
+
+/** Rotation and flip of a collection image. The menu stays open, so both can be set one after the other. */
+function OrientationRows({ingredient}: {ingredient: Ingredient}) {
+  const pending = useStore(orientationStore, state => state.pending.get(ingredient.id))
+  const shown = pending ?? getIngredientOrientation(ingredient)
+  const available = useSyncExternalStore(subscribeAssets, () => assets.has(getSourceAssetId(ingredient)))
+  const apply = async (patch: Partial<Orientation>) => {
+    try {
+      await setIngredientOrientation(ingredient.id, patch)
+    } catch (error) {
+      notify('error', getErrorMessage(error))
+    }
+  }
+  return <>
+    <label className={css.row}>
+      <span>Rotation</span>
+      <select aria-busy={Boolean(pending)} aria-label='Rotation' data-testid='collection-rotation' disabled={!available} value={shown.rotation} onChange={event => void apply({rotation: Number(event.currentTarget.value) as Rotation})}>
+        {rotations.map(rotation => <option key={rotation} value={rotation}>{rotationTitles[rotation]}</option>)}
+      </select>
+    </label>
+    <label className={css.row}>
+      <span>Flip</span>
+      <select aria-busy={Boolean(pending)} aria-label='Flip' data-testid='collection-flip' disabled={!available} value={shown.flip} onChange={event => void apply({flip: event.currentTarget.value as Flip})}>
+        {flips.map(flip => <option key={flip} value={flip}>{flipTitles[flip]}</option>)}
+      </select>
+    </label>
+  </>
 }

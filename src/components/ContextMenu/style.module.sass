@@ -24,6 +24,26 @@
     &:hover, &:focus-visible
       outline: none
       background: rgb(231 208 148 / 16%)
+  .row
+    display: flex
+    align-items: center
+    justify-content: space-between
+    gap: 8px
+    padding: 3px 0 3px 10px
+    font-size: 12px
+    select
+      flex: 0 1 162px
+      min-width: 0
+      padding: 4px 2px 4px 6px
+      border: 1px solid var(--border)
+      border-radius: 6px
+      background: var(--surface)
+      color: inherit
+      font-size: 12px
+      &[aria-busy=true]
+        cursor: progress
+      &:focus-visible
+        outline-offset: 0
   strong
     padding: 6px 10px
     overflow: hidden

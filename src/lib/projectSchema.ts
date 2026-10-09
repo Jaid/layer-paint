@@ -5,6 +5,7 @@ import type {GenerationEvidence, GenerationRevision, Ingredient, Layer, LayerAli
 
 import {adjustmentKeys, normalizeAdjustments} from './adjustments/index.ts'
 import {findModel} from './models/index.ts'
+import {isFlip, isRotation} from './orientation.ts'
 import {closestRatio, isRatioString, parseRatio} from './ratio.ts'
 
 export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -125,7 +126,7 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
       return fail()
     }
     // Thumbnails are regenerated from decoded assets, not trusted HTML or URLs.
-    return {
+    const result: Ingredient = {
       id: uniqueId(v.id),
       assetId: text(v.assetId),
       index,
@@ -134,6 +135,20 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
       thumbnail: '',
       kind: kind as Ingredient['kind'],
     }
+    if (v.rotation !== undefined) {
+      result.rotation = isRotation(v.rotation) && v.rotation !== 0 ? v.rotation : fail()
+    }
+    if (v.flip !== undefined) {
+      result.flip = isFlip(v.flip) && v.flip !== 'none' ? v.flip : fail()
+    }
+    // The original image is kept exactly while a rotation or flip is applied.
+    if (v.sourceAssetId !== undefined) {
+      result.sourceAssetId = text(v.sourceAssetId)
+    }
+    if (Boolean(result.sourceAssetId) !== Boolean(result.rotation || result.flip)) {
+      return fail()
+    }
+    return result
   })
   const next = value.nextIngredientIndex ?? Math.max(0, ...indexes) + 1
   if (!Number.isSafeInteger(next) || Number(next) <= Math.max(0, ...indexes)) {
@@ -171,6 +186,9 @@ export function collectDocumentAssetIds(documents: Iterable<ProjectDocument>) {
     }
     for (const ingredient of document.ingredients) {
       ids.add(ingredient.assetId)
+      if (ingredient.sourceAssetId) {
+        ids.add(ingredient.sourceAssetId)
+      }
     }
   }
   return ids
