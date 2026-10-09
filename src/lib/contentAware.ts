@@ -53,7 +53,9 @@ export async function setContentAwareAlignment(id: string, enabled: boolean) {
     if (known && !layer.alignment) {
       storeAlignment(layer.assetId, known)
     }
-    updateLayer(id, {contentAware: enabled})
+    if (Boolean(layer.contentAware) !== enabled) {
+      updateLayer(id, {contentAware: enabled})
+    }
     if (enabled && known && !known.applied) {
       notify('info', 'No reliable drift was found earlier, so this layer stays where it was generated.')
     }
@@ -77,7 +79,9 @@ export async function setContentAwareAlignment(id: string, enabled: boolean) {
       return
     }
     storeAlignment(layer.assetId, alignment)
-    updateLayer(id, {contentAware: true})
+    if (!getLayer(id)!.contentAware) {
+      updateLayer(id, {contentAware: true})
+    }
     if (!alignment.applied) {
       notify('info', `No reliable drift was found (${registration.reason}). The layer stays where it was generated.`)
     }

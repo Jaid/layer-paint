@@ -9,6 +9,7 @@ import {useEffect, useRef, useState} from 'react'
 import JobOverlay from '#component/JobOverlay'
 import {fitFrameToRect, selectLayer, setFrame, updateLayer} from '#src/lib/actions.ts'
 import {getDroppedIngredient, isIngredientDrag} from '#src/lib/collectionDrag.ts'
+import {useHoveredCollectionAssetId} from '#src/lib/collectionHover.ts'
 import {findLayerAt, renderRegion} from '#src/lib/composite.ts'
 import {openContextMenu} from '#src/lib/contextMenu.ts'
 import {rectCenter, rectContains, rectFromCenter} from '#src/lib/geometry.ts'
@@ -18,6 +19,7 @@ import {getFeatherCore, getMaskMetrics} from '#src/lib/mask.ts'
 import {getModel} from '#src/lib/models/index.ts'
 import {getContentRegion} from '#src/lib/generationRegion.ts'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
+import {getAssetOccurrences} from '#src/lib/revisions.ts'
 import {editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
 import {screenToWorld, setViewportSize, worldToScreen, zoomView} from '#src/lib/viewport.ts'
@@ -55,6 +57,7 @@ const rectStyle = (rect: Rect, rotation = 0) => ({
 export default function Viewport() {
   const ref = useRef<HTMLDivElement>(null); const canvasRef = useRef<HTMLCanvasElement>(null); const drag = useRef<Drag | null>(null)
   const editor = useStore(editorStore); const layers = useStore(projectStore, state => state.layers)
+  const hoveredAssetId = useHoveredCollectionAssetId()
   const [size, setSize] = useState({
     width: 800,
     height: 600,
@@ -377,7 +380,9 @@ export default function Viewport() {
   }
   const {view, frame, frameEnabled, tool, selectedLayerId, hoveredLayerId, jobs} = editor
   // While the frame is off, hovering Generate previews the region that spans all artwork.
-  const contentRegion = !frameEnabled && editor.generationHover ? getContentRegion(layers, getModel(editor.modelId).aspectRatios) : undefined
+  const contentRegion = !frameEnabled && (editor.generationHover || editor.hoveredCollectionIndex === 0) ? getContentRegion(layers, getModel(editor.modelId).aspectRatios) : undefined
+  // Hovering a collection item shows every layer that uses its image.
+  const occurrences = hoveredAssetId ? getAssetOccurrences(layers, hoveredAssetId) : []
   const selected = layers.find(layer => layer.id === selectedLayerId)
   const outlined = layers.filter(layer => layer.visible && (layer.id === selectedLayerId || layer.id === hoveredLayerId))
   const frameScreen = toScreenRect(view, frame)
@@ -427,7 +432,8 @@ export default function Viewport() {
         {(['n', 'e', 's', 'w'] as const).map(edge => <div key={edge} className={clsx(css.edgeHandle, css[edge])} data-edge={edge} title='Drag to snap between model-supported aspect ratios' />)}
       </>}
     </div>}
-    {tool !== 'mask' && contentRegion && <div className={clsx(css.frame, css.charged, css.contentRegion)} data-testid='content-region' style={rectStyle(toScreenRect(view, contentRegion.frame))} />}
+    {occurrences.map(({layer, buried}) => <div key={layer.id} className={clsx(css.occurrence, buried && css.buried, !layer.visible && css.hiddenOccurrence)} data-testid='occurrence' style={rectStyle(toScreenRect(view, layer.rect), layer.rotation)} />)}
+    {tool !== 'mask' && contentRegion && <div className={clsx(css.frame, editor.generationHover && css.charged, css.contentRegion)} data-testid='content-region' style={rectStyle(toScreenRect(view, contentRegion.frame))} />}
     {tool === 'mask' && <div className={css.modeHint}>{selected ? 'Mask edit · drag to reposition · Escape to leave' : 'Select a non-background layer to edit its mask'}</div>}
     {guides.x !== undefined && <div
       className={css.guideX} style={{left: worldToScreen(view, {

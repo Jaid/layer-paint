@@ -5,7 +5,8 @@ import clsx from 'clsx'
 import {RotateCw, X} from 'lucide-react'
 import {useEffect, useState} from 'react'
 
-import {dismissJob, generate} from '#src/lib/generation.ts'
+import {getLayer} from '#src/lib/actions.ts'
+import {dismissJob, generate, reroll} from '#src/lib/generation.ts'
 import {getModel} from '#src/lib/models/index.ts'
 
 import css from './style.module.sass'
@@ -32,6 +33,11 @@ const JobOverlay = ({job, rect}: Props) => {
   const seconds = useElapsedSeconds(job.startedAt, running)
   const retry = () => {
     dismissJob(job.id)
+    // A failed reroll is retried as a reroll as long as its layer exists.
+    if (job.layerId && getLayer(job.layerId)) {
+      void reroll(job.layerId)
+      return
+    }
     void generate({
       frame: job.rect,
       prompt: job.prompt,

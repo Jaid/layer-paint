@@ -129,6 +129,7 @@ const PromptEditor = () => {
   const dark = useDarkMode()
   const prompt = useStore(editorStore, state => state.prompt)
   const ingredients = useStore(projectStore, state => state.ingredients)
+  const hoveredIndex = useStore(editorStore, state => state.hoveredCollectionIndex)
   const editorRef = useRef<StandaloneEditor | null>(null)
   const decorationsRef = useRef<DecorationsCollection | null>(null)
   const monacoRef = useRef<MonacoApi | null>(null)
@@ -185,6 +186,7 @@ const PromptEditor = () => {
       return
     }
     const available = new Set(getIngredients().map(ingredient => ingredient.index))
+    const hovered = editorStore.state.hoveredCollectionIndex
     const range = (from: number, to: number) => {
       const start = model.getPositionAt(from)
       const end = model.getPositionAt(to)
@@ -193,9 +195,10 @@ const PromptEditor = () => {
     const decorations = findReferences(model.getValue()).flatMap(reference => {
       const valid = reference.index === 0 || available.has(reference.index)
       const className = reference.index === 0 ? css.canvasReference : (valid ? css.reference : css.missingReference)
+      // References to the hovered collection tile light up.
       const token = {
         range: range(reference.start, reference.referenceEnd),
-        options: {inlineClassName: className},
+        options: {inlineClassName: reference.index === hovered ? `${className} ${css.hoveredReference}` : className},
       }
       if (reference.end === reference.referenceEnd) {
         return [token]
@@ -207,7 +210,7 @@ const PromptEditor = () => {
     })
     decorationsRef.current.set(decorations)
   }
-  useEffect(updateDecorations, [ingredients, prompt])
+  useEffect(updateDecorations, [ingredients, prompt, hoveredIndex])
   useEffect(() => () => {
     registerPromptInserter(undefined)
     cleanupRef.current?.()

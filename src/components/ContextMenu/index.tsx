@@ -1,9 +1,10 @@
 import {useEffect, useRef} from 'react'
 
-import {addIngredients, fitFrameToContent, fitFrameToRect, fitViewToContent, fitViewToFrame, importLayers, moveLayerInStack, redo, removeLayer, selectLayer, undo, updateLayer} from '#src/lib/actions.ts'
+import {addIngredients, fitFrameToContent, fitFrameToRect, fitViewToContent, fitViewToFrame, importLayers, moveLayerInStack, redo, removeIngredient, removeLayer, selectLayer, undo, updateLayer} from '#src/lib/actions.ts'
 import {closeContextMenu, contextMenuStore} from '#src/lib/contextMenu.ts'
 import {exportIngredient, openExportDialog} from '#src/lib/exporting.ts'
 import {pickImageFiles} from '#src/lib/filePicker.ts'
+import {reroll} from '#src/lib/generation.ts'
 import {getLayerBounds} from '#src/lib/layerGeometry.ts'
 import {getErrorMessage, notify} from '#src/lib/notices.ts'
 import {insertIntoPrompt} from '#src/lib/promptEditor.ts'
@@ -53,7 +54,7 @@ export default function ContextMenu() {
     closeContextMenu(); Promise.resolve().then(action).catch(error => notify('error', getErrorMessage(error)))
   }
   const button = (label: string, action: () => unknown, disabled = false) => <button disabled={disabled} role='menuitem' type='button' onClick={() => run(action)}>{label}</button>
-  const estimatedHeight = collection ? 90 : (layer ? 610 : 420)
+  const estimatedHeight = collection ? 120 : (layer ? 650 : 420)
   return <div
     className={css.menu} aria-label={collection ? 'Collection context menu' : 'Canvas context menu'} data-overlay-control role='menu' style={{
       top: Math.max(8, Math.min(menu.y, innerHeight - estimatedHeight)),
@@ -73,7 +74,10 @@ export default function ContextMenu() {
   >
     {collection && <>
       <strong>{collectionItem ? `![${collectionItem.index}] · ${collectionItem.name}` : `![0] · ${frameEnabled ? 'canvas inside the frame' : 'all canvas artwork'}`}</strong>
-      {collectionItem ? button('Export', () => exportIngredient(collectionItem)) : button('Export…', () => openExportDialog('frame'), !hasArtwork)}
+      {collectionItem ? <>
+        {button('Export', () => exportIngredient(collectionItem))}
+        {button('Delete', () => removeIngredient(collectionItem.id))}
+      </> : button('Export…', () => openExportDialog('frame'), !hasArtwork)}
     </>}
     {!collection && <>
       {layer && <>
@@ -84,6 +88,7 @@ export default function ContextMenu() {
             frameEnabled: true,
           })
         })}
+        {layer.kind === 'generated' && layer.evidence && button('Reroll', () => reroll(layer.id))}
         {button('Use as prompt reference', async () => {
           const ingredient = await referenceAsset(layer.assetId, layer.name, layer.kind === 'generated' ? 'generated' : 'import'); insertIntoPrompt(`![${ingredient.index}]`)
         })}

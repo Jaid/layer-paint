@@ -1,4 +1,4 @@
-import type {ProjectDocument} from './state.ts'
+import type {GenerationEvidence, ProjectDocument} from './state.ts'
 
 import {advanceWorkspaceEpoch, withLayerIngredients} from './actions.ts'
 import {assets} from './assets.ts'
@@ -88,6 +88,13 @@ export async function openPortableProject(file: Blob | File) {
     } throw new Error('The workspace changed while the project was opening. Your edits were preserved; open the file again when ready.')
   }
   const remap = new Map(staged.map(entry => [entry.oldId, entry.id]))
+  const remapEvidence = (evidence: GenerationEvidence): GenerationEvidence => ({
+    ...evidence,
+    id: createId(),
+    outputAssetId: remap.get(evidence.outputAssetId)!,
+    canvasAssetId: evidence.canvasAssetId ? remap.get(evidence.canvasAssetId)! : undefined,
+    referenceAssetIds: evidence.referenceAssetIds.map(id => remap.get(id)!),
+  })
   const newDocument: ProjectDocument = {
     nextIngredientIndex: document.nextIngredientIndex,
     ...document.layersNumbered ? {layersNumbered: true} : {},
@@ -100,13 +107,12 @@ export async function openPortableProject(file: Blob | File) {
       ...layer,
       id: createId(),
       assetId: remap.get(layer.assetId)!,
-      ...layer.evidence ? {evidence: {
-        ...layer.evidence,
-        id: createId(),
-        outputAssetId: remap.get(layer.evidence.outputAssetId)!,
-        canvasAssetId: layer.evidence.canvasAssetId ? remap.get(layer.evidence.canvasAssetId)! : undefined,
-        referenceAssetIds: layer.evidence.referenceAssetIds.map(id => remap.get(id)!),
-      }} : {},
+      ...layer.evidence ? {evidence: remapEvidence(layer.evidence)} : {},
+      ...layer.revisions ? {revisions: layer.revisions.map(item => ({
+        ...item,
+        assetId: remap.get(item.assetId)!,
+        evidence: remapEvidence(item.evidence),
+      }))} : {},
     })),
   }
   for (const entry of staged) {
@@ -126,6 +132,7 @@ export async function openPortableProject(file: Blob | File) {
     jobs: [],
     selectedLayerId: null,
     hoveredLayerId: null,
+    hoveredCollectionIndex: null,
     tool: 'frame',
   })
   resumeAutosave()

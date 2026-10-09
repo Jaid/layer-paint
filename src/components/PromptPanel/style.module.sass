@@ -153,6 +153,21 @@ $borderLight: #e4e4e4
   &:active
     filter: brightness(0.95)
 
+// Invisible copies of the longest labels share one grid cell with the visible label, so the button is as wide as its widest state.
+.generateLabel
+  display: inline-grid
+  justify-items: center
+  > span, &::before, &::after
+    grid-area: 1 / 1
+  &::before, &::after
+    visibility: hidden
+    height: 0
+    overflow: hidden
+  &::before
+    content: attr(data-reserve-a)
+  &::after
+    content: attr(data-reserve-b)
+
 .badge
   position: absolute
   top: -6px

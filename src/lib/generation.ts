@@ -1,10 +1,14 @@
+import type {Asset} from './assets.ts'
 import type {Rect} from './geometry.ts'
+import type {ImageModel} from './models/index.ts'
+import type {RatioString} from './ratio.ts'
 import type {GenerationEvidence, Job, Layer} from './state.ts'
 
-import {createIngredient, withIngredient, workspaceEpoch} from './actions.ts'
+import {createIngredient, getLayer, withIngredient, workspaceEpoch} from './actions.ts'
 import {apiKeyStore, getApiKey, hasApiKey, refreshApiStatus, requestApiKey} from './apiKey.ts'
 import {assets} from './assets.ts'
 import {frameHasContent, getUpstreamCanvasSize, renderRegion} from './composite.ts'
+import {setContentAwareAlignment, supportsContentAwareAlignment} from './contentAware.ts'
 import {createId} from './createId.ts'
 import {createDemoImage} from './demo.ts'
 import {blobToDataUrl, encodeCanvas, prepareUpstreamImage} from './image.ts'
@@ -14,6 +18,7 @@ import {getModel} from './models/index.ts'
 import {getErrorMessage, notify} from './notices.ts'
 import {compilePrompt, findReferences} from './prompt.ts'
 import {closestRatio} from './ratio.ts'
+import {getRevisions, withAddedRevision} from './revisions.ts'
 import {defaultGeneratedMask, editorStore, projectStore} from './state.ts'
 
 export const emptyCanvasColor = '#808080'
@@ -66,6 +71,49 @@ export const dismissJob = (id: string) => {
   }))
 }
 
+/** everything a request needs, captured before anything is encoded or sent */
+type GenerationTask = {
+  /** the canvas inside the frame, freshly rendered or – for rerolls – the exact image the first shot was sent */
+  canvas?: {
+    assetId: string
+  } | {
+    canvas: OffscreenCanvas
+  }
+  capturedAt: number
+  compiledPrompt: string
+  demoMode: boolean
+  epoch: number
+  frame: Rect
+  /** the generated layer that receives the result as a new revision */
+  layerId?: string
+  model: ImageModel
+  prompt: string
+  quality: string
+  ratio: RatioString
+  /** referenced collection images in prompt order */
+  referenceAssetIds: ReadonlyArray<string>
+  resolution: string
+  /** distinguishes the procedural demo images of rerolls */
+  variation?: number
+}
+
+/** Checks credentials and concurrency; resolves false when the request must not be sent. */
+const ensureDispatchable = async (task: GenerationTask) => {
+  if (!apiKeyStore.state.checked && !task.demoMode) {
+    await refreshApiStatus()
+  }
+  if (task.epoch !== workspaceEpoch) {
+    return false
+  }
+  if (!task.demoMode && !hasApiKey()) {
+    requestApiKey(); notify('info', 'Configure the local server or enter a browser-session key. Demo mode does not need a key.'); return false
+  }
+  if (editorStore.state.jobs.filter(job => job.status === 'running').length >= 2) {
+    notify('info', 'Two generations are already running.'); return false
+  }
+  return true
+}
+
 /** Snapshot first, encode second, send last. Store mutations during a request cannot change its inputs or placement. */
 export async function generate(overrides: GenerationOverrides = {}) {
   const epoch = workspaceEpoch; const capturedAt = Date.now()
@@ -79,26 +127,85 @@ export async function generate(overrides: GenerationOverrides = {}) {
     notify('error', prepared.compiled.errors.join(' ')); return
   }
   const {editor, document, compiled, rendered, model} = prepared
-  if (!apiKeyStore.state.checked && !editor.demoMode) {
-    await refreshApiStatus()
+  const referenceAssetIds: Array<string> = []
+  for (const source of compiled.sources) {
+    if (source.kind !== 'ingredient') {
+      continue
+    }
+    const ingredient = document.ingredients.find(item => item.index === source.index)
+    if (!ingredient) {
+      notify('error', 'A prompt ingredient is missing.'); return
+    }
+    referenceAssetIds.push(ingredient.assetId)
   }
-  if (epoch !== workspaceEpoch) {
+  await runGeneration({
+    epoch,
+    capturedAt,
+    model,
+    demoMode: editor.demoMode,
+    frame: editor.frame,
+    ratio: editor.ratio,
+    resolution: editor.resolution,
+    quality: editor.quality,
+    prompt: editor.prompt,
+    compiledPrompt: compiled.text,
+    canvas: rendered ? {canvas: rendered.canvas} : undefined,
+    referenceAssetIds,
+  })
+}
+
+/**
+ * Sends the request of a generated layer again: the same prompt and the very same input images, but the currently selected model and model settings.
+ * The result becomes a further revision of that layer.
+ */
+export async function reroll(layerId: string) {
+  const epoch = workspaceEpoch; const capturedAt = Date.now()
+  const layer = getLayer(layerId)
+  const evidence = layer?.evidence
+  if (!layer || layer.kind !== 'generated' || !evidence) {
+    notify('error', 'Only generations can be rerolled.'); return
+  }
+  const model = getModel(editorStore.state.modelId)
+  const inputIds = [...evidence.canvasAssetId ? [evidence.canvasAssetId] : [], ...evidence.referenceAssetIds]
+  if (inputIds.some(id => !assets.has(id))) {
+    notify('error', 'The captured input images of this generation are unavailable.'); return
+  }
+  if (inputIds.length > model.maxReferences) {
+    notify('error', `${model.title} accepts at most ${model.maxReferences} input images, but this generation used ${inputIds.length}. Choose another model to reroll it.`); return
+  }
+  const {demoMode, resolution, quality} = editorStore.state
+  await runGeneration({
+    epoch,
+    capturedAt,
+    model,
+    demoMode,
+    frame: {...layer.rect},
+    ratio: closestRatio(layer.rect.width / layer.rect.height, model.aspectRatios),
+    resolution: model.normalizeResolution(resolution) ?? '',
+    quality: model.normalizeQuality(quality) ?? '',
+    prompt: evidence.prompt,
+    compiledPrompt: evidence.compiledPrompt,
+    canvas: evidence.canvasAssetId ? {assetId: evidence.canvasAssetId} : undefined,
+    referenceAssetIds: evidence.referenceAssetIds,
+    layerId,
+    variation: getRevisions(layer).length,
+  })
+}
+
+async function runGeneration(task: GenerationTask) {
+  const {model, epoch} = task
+  if (!await ensureDispatchable(task)) {
     return
-  }
-  if (!editor.demoMode && !hasApiKey()) {
-    requestApiKey(); notify('info', 'Configure the local server or enter a browser-session key. Demo mode does not need a key.'); return
-  }
-  if (editorStore.state.jobs.filter(job => job.status === 'running').length >= 2) {
-    notify('info', 'Two generations are already running.'); return
   }
   const job: Job = {
     id: createId(),
     controller: new AbortController,
     modelId: model.id,
-    prompt: editor.prompt,
-    rect: {...editor.frame},
+    prompt: task.prompt,
+    rect: {...task.frame},
     startedAt: Date.now(),
     status: 'running',
+    ...task.layerId ? {layerId: task.layerId} : {},
   }
   const signal = AbortSignal.any([job.controller.signal, AbortSignal.timeout(240_000)])
   editorStore.set(state => ({
@@ -109,30 +216,20 @@ export async function generate(overrides: GenerationOverrides = {}) {
   let cost: number | undefined
   const current = () => epoch === workspaceEpoch && !job.controller.signal.aborted
   try {
-    const ingredientAssets = compiled.sources.flatMap(source => {
-      if (source.kind !== 'ingredient') {
-        return []
-      }
-      const ingredient = document.ingredients.find(item => item.index === source.index)
-      if (!ingredient) {
-        throw new Error('A prompt ingredient is missing.')
-      }
-      return [assets.require(ingredient.assetId)]
-    })
-    releases.push(assets.pin(ingredientAssets.map(asset => asset.id)))
-    let canvasAssetId: string | undefined
+    const ingredientAssets = task.referenceAssetIds.map(id => assets.require(id))
+    const capturedCanvas = task.canvas && 'assetId' in task.canvas ? assets.require(task.canvas.assetId) : undefined
+    releases.push(assets.pin([...ingredientAssets.map(asset => asset.id), ...capturedCanvas ? [capturedCanvas.id] : []]))
+    let canvasAsset: Asset | undefined
     const referenceAssetIds: Array<string> = []; const input_references: Array<{
       image_url: {url: string}
       type: 'image_url'
     }> = []
-    if (rendered) {
-      const blob = await encodeCanvas(rendered.canvas, 'webp', 0.98)
-      const asset = await assets.add(blob)
-      canvasAssetId = asset.id
-      releases.push(assets.pin([asset.id]))
+    if (task.canvas) {
+      canvasAsset = 'canvas' in task.canvas ? await assets.add(await encodeCanvas(task.canvas.canvas, 'webp', 0.98)) : capturedCanvas!
+      releases.push(assets.pin([canvasAsset.id]))
       input_references.push({
         type: 'image_url',
-        image_url: {url: await blobToDataUrl(blob)},
+        image_url: {url: await blobToDataUrl(canvasAsset.blob)},
       })
     }
     for (const source of ingredientAssets) {
@@ -148,17 +245,18 @@ export async function generate(overrides: GenerationOverrides = {}) {
     signal.throwIfAborted()
     const request = validateImageRequest({
       model: model.id,
-      prompt: compiled.text,
-      aspect_ratio: editor.ratio,
+      prompt: task.compiledPrompt,
+      aspect_ratio: task.ratio,
       ...model.getRequestOptions({
-        resolution: editor.resolution,
-        quality: editor.quality,
+        resolution: task.resolution,
+        quality: task.quality,
       }),
       input_references,
     })
     let blob: Blob
-    if (editor.demoMode) {
-      blob = await createDemoImage(editor.prompt, job.rect.width / job.rect.height, rendered?.canvas, signal)
+    if (task.demoMode) {
+      const source = task.canvas && 'canvas' in task.canvas ? task.canvas.canvas : canvasAsset?.bitmap
+      blob = await createDemoImage(task.prompt, job.rect.width / job.rect.height, source, signal, task.variation)
     } else {
       const key = getApiKey(); const useGateway = !key && apiKeyStore.state.serverConfigured
       const response = await fetch(useGateway ? '/api/generate' : 'https://openrouter.ai/api/v1/images', {
@@ -189,26 +287,26 @@ export async function generate(overrides: GenerationOverrides = {}) {
     if (Math.abs(Math.log(actualAspect / requestedAspect)) > 0.02) {
       notify('info', 'The provider returned a different aspect ratio. It is fitted into the captured frame; the raw output remains in the project.')
     }
-    const name = `${editor.demoMode ? 'Demo · ' : ''}${editor.prompt.trim().split('\n')[0].slice(0, 72)}`
+    const name = `${task.demoMode ? 'Demo · ' : ''}${task.prompt.trim().split('\n')[0].slice(0, 72)}`
     const ingredient = await createIngredient(raw, name, 'generated')
     if (!current()) {
       return
     }
     const evidence: GenerationEvidence = {
       id: job.id,
-      capturedAt,
+      capturedAt: task.capturedAt,
       frame: job.rect,
       modelId: model.id,
-      ratio: editor.ratio,
-      resolution: editor.resolution,
-      quality: editor.quality,
-      prompt: editor.prompt,
-      compiledPrompt: compiled.text,
-      canvasAssetId,
+      ratio: task.ratio,
+      resolution: task.resolution,
+      quality: task.quality,
+      prompt: task.prompt,
+      compiledPrompt: task.compiledPrompt,
+      canvasAssetId: canvasAsset?.id,
       referenceAssetIds,
       outputAssetId: raw.id,
       cost,
-      demo: editor.demoMode,
+      demo: task.demoMode,
     }
     const layer: Layer = {
       ...defaultGeneratedMask,
@@ -220,17 +318,27 @@ export async function generate(overrides: GenerationOverrides = {}) {
       visible: true,
       createdAt: Date.now(),
       modelId: model.id,
-      prompt: editor.prompt,
+      prompt: task.prompt,
       evidence,
     }
+    // A reroll whose layer was deleted in the meantime still lands, as a layer of its own.
+    const target = task.layerId ? getLayer(task.layerId) : undefined
     projectStore.commit(state => withIngredient({
       ...state,
-      layers: [...state.layers, layer],
+      layers: target ? state.layers.map(item => (item.id === target.id ? withAddedRevision(item, {
+        assetId: raw.id,
+        evidence,
+        modelId: model.id,
+      }) : item)) : [...state.layers, layer],
     }, ingredient))
     editorStore.set(state => ({
       ...state,
       jobs: state.jobs.filter(item => item.id !== job.id),
     }))
+    const updated = target && getLayer(target.id)
+    if (updated?.contentAware && supportsContentAwareAlignment(updated)) {
+      void setContentAwareAlignment(updated.id, true)
+    }
   } catch (error) {
     if (!current()) {
       editorStore.set(state => ({

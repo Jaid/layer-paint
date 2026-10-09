@@ -24,6 +24,8 @@ export type RenderedRegion = {
 }
 assets.subscribeRelease(forgetAdjustedImages)
 
+/** whether a layer contributes any pixels at all */
+export const isLayerShown = (layer: Layer) => layer.visible && (layer.opacity ?? 1) > 0
 export const getVisibleLayers = (layers: ReadonlyArray<Layer>) => layers.filter(layer => layer.visible)
 export const isBackgroundLayer = (layers: ReadonlyArray<Layer>, layer: Layer) => layers[0]?.id === layer.id
 
@@ -132,7 +134,7 @@ export function renderRegion(options: RenderRegionOptions): RenderedRegion {
     context.translate(-layer.rect.width / 2, -layer.rect.height / 2)
   }
   for (const [index, layer] of options.layers.entries()) {
-    if (!layer.visible || index > 0 && layer.area <= 0 || !rectIntersection(getLayerBounds(layer), region)) {
+    if (!isLayerShown(layer) || index > 0 && layer.area <= 0 || !rectIntersection(getLayerBounds(layer), region)) {
       continue
     }
     const asset = assets.get(layer.assetId)
@@ -142,7 +144,11 @@ export function renderRegion(options: RenderRegionOptions): RenderedRegion {
     const masked = index > 0 && isMaskActive(layer)
     const surface = masked ? createCanvas(canvas.width, canvas.height) : canvas
     const target = masked ? getContext(surface) : ctx
+    const opacity = layer.opacity ?? 1
     target.save()
+    if (!masked) {
+      target.globalAlpha = opacity
+    }
     transform(target, layer)
     if (masked) {
       clipMask(target, layer, layer.rect)
@@ -181,7 +187,10 @@ export function renderRegion(options: RenderRegionOptions): RenderedRegion {
       target.drawImage(reduction, 0, 0)
       target.restore()
     }
+    ctx.save()
+    ctx.globalAlpha = opacity
     ctx.drawImage(surface, 0, 0)
+    ctx.restore()
   }
   const emptyFraction = options.measureEmpty === false ? 0 : measureEmptyFraction(canvas)
   if (options.background) {
@@ -197,8 +206,8 @@ export function renderRegion(options: RenderRegionOptions): RenderedRegion {
   }
 }
 
-export const getContentBounds = (layers: ReadonlyArray<Layer>) => rectUnion(layers.flatMap((layer, i) => (layer.visible && (i === 0 || layer.area > 0) ? [getLayerBounds(layer, i > 0)] : [])).filter(rect => rect.width > 0 && rect.height > 0))
-export const frameHasContent = (layers: ReadonlyArray<Layer>, frame: Rect) => layers.some((layer, i) => layer.visible && (i === 0 || layer.area > 0) && rectIntersection(getLayerBounds(layer, i > 0), frame) && assets.has(layer.assetId))
+export const getContentBounds = (layers: ReadonlyArray<Layer>) => rectUnion(layers.flatMap((layer, i) => (isLayerShown(layer) && (i === 0 || layer.area > 0) ? [getLayerBounds(layer, i > 0)] : [])).filter(rect => rect.width > 0 && rect.height > 0))
+export const frameHasContent = (layers: ReadonlyArray<Layer>, frame: Rect) => layers.some((layer, i) => isLayerShown(layer) && (i === 0 || layer.area > 0) && rectIntersection(getLayerBounds(layer, i > 0), frame) && assets.has(layer.assetId))
 export const getUpstreamCanvasSize = (frame: Rect, maxSide = 2048, minSide = 1024): Size => {
   const side = Math.max(frame.width, frame.height); const target = Math.min(maxSide, Math.max(minSide, side)); const scale = target / side
   return {
