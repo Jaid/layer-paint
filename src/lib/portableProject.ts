@@ -102,6 +102,7 @@ export async function openPortableProject(file: Blob | File) {
       ...item,
       id: createId(),
       assetId: remap.get(item.assetId)!,
+      ...item.sourceAssetId ? {sourceAssetId: remap.get(item.sourceAssetId)!} : {},
     })),
     layers: document.layers.map(layer => ({
       ...layer,

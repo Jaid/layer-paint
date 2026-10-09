@@ -341,6 +341,45 @@ describe('components', () => {
       ingredients: [],
     }))
   })
+  test('collection items offer rotation and flip dropdowns that reflect the entry', async () => {
+    const {projectStore} = await import('#src/lib/state.ts')
+    const {openCollectionMenu} = await import('#src/lib/contextMenu.ts')
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [{
+        id: 'ingredient-1',
+        assetId: 'missing-turned',
+        sourceAssetId: 'missing-1',
+        rotation: 270,
+        flip: 'vertical',
+        index: 1,
+        name: 'Image 1',
+        kind: 'import' as const,
+        thumbnail: 'data:image/webp;base64,AAAA',
+        createdAt: 0,
+      }],
+      nextIngredientIndex: 2,
+    }))
+    const menu = await renderComponent('ContextMenu')
+    act(() => openCollectionMenu(10, 10, 1))
+    const rotation = menu.container.querySelector<HTMLSelectElement>('[data-testid="collection-rotation"]')!
+    const flip = menu.container.querySelector<HTMLSelectElement>('[data-testid="collection-flip"]')!
+    expect(rotation.closest('label')?.textContent).toStartWith('Rotation')
+    expect(flip.closest('label')?.textContent).toStartWith('Flip')
+    expect([...rotation.options].map(option => option.textContent)).toEqual(['0°', '90° clockwise', '90° counterclockwise', '180°'])
+    expect([...flip.options].map(option => option.textContent)).toEqual(['None', 'Horizontal', 'Vertical', 'Both'])
+    expect(rotation.value).toBe('270')
+    expect(flip.value).toBe('vertical')
+    // Without the original pixels there is nothing to transform.
+    expect(rotation.disabled).toBe(true)
+    expect(flip.disabled).toBe(true)
+    act(() => openCollectionMenu(10, 10, 0))
+    expect(menu.container.querySelector('select')).toBeNull()
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [],
+    }))
+  })
   test('Delete in the context menu of a collection item removes it without renumbering', async () => {
     const {projectStore} = await import('#src/lib/state.ts')
     const {openCollectionMenu} = await import('#src/lib/contextMenu.ts')

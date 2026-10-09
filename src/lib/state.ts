@@ -2,6 +2,7 @@ import type {Adjustments} from './adjustments/index.ts'
 import type {Placement} from './alignment/align.ts'
 import type {Rect} from './geometry.ts'
 import type {MaskSettings} from './mask.ts'
+import type {Flip, Rotation} from './orientation.ts'
 import type {RatioString} from './ratio.ts'
 
 import queryParameters from '#src/queryParameters.ts'
@@ -77,13 +78,20 @@ export type Layer = MaskSettings & {
 }
 
 export type Ingredient = {
+  /** the shown image; while a rotation or flip is applied, it holds the transformed pixels of `sourceAssetId` */
   assetId: string
   createdAt: number
+  /** flip applied after the rotation, along the axes of the rotated image; absent means none */
+  flip?: Exclude<Flip, 'none'>
   id: string
   /** stable number used in prompt references like ![1] */
   index: number
   kind?: 'generated' | 'import' | 'snapshot'
   name: string
+  /** clockwise rotation in degrees; absent means 0 */
+  rotation?: Exclude<Rotation, 0>
+  /** the untransformed image, present exactly while a rotation or flip is applied */
+  sourceAssetId?: string
   /** small WebP data URL for editor hovers */
   thumbnail: string
 }
