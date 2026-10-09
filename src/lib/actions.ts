@@ -118,7 +118,7 @@ const mapLayers = (document: ProjectDocument, id: string, mapper: (layer: Layer)
   layers: document.layers.map(layer => (layer.id === id ? mapper(layer) : layer)),
 })
 
-export type LayerPatch = Partial<Pick<Layer, 'adjustments' | 'area' | 'contentAware' | 'feather' | 'featherAllEdges' | 'name' | 'offsetX' | 'offsetY' | 'rect' | 'rotation' | 'roundness' | 'visible'>>
+export type LayerPatch = Partial<Pick<Layer, 'adjustments' | 'area' | 'contentAware' | 'feather' | 'featherAllEdges' | 'name' | 'offsetX' | 'offsetY' | 'opacity' | 'rect' | 'rotation' | 'roundness' | 'visible'>>
 
 export const updateLayer = (id: string, patch: LayerPatch, options: CommitOptions = {}) => {
   const layer = getLayer(id)
@@ -132,7 +132,7 @@ export const updateLayer = (id: string, patch: LayerPatch, options: CommitOption
   if (patch.rect && (!Object.values(patch.rect).every(Number.isFinite) || patch.rect.width <= 0 || patch.rect.height <= 0)) {
     return
   }
-  for (const key of ['area', 'feather', 'roundness'] as const) {
+  for (const key of ['area', 'feather', 'opacity', 'roundness'] as const) {
     if (!(patch[key] !== undefined)) {
       continue
     }
@@ -164,6 +164,10 @@ export const updateLayer = (id: string, patch: LayerPatch, options: CommitOption
     }
     if (!next.adjustments) {
       delete next.adjustments
+    }
+    // Fully opaque layers are stored without an opacity.
+    if (next.opacity === undefined || next.opacity >= 1) {
+      delete next.opacity
     }
     return next
   }), options)
@@ -371,6 +375,7 @@ export const addIngredients = async (files: ReadonlyArray<File>) => {
   return added
 }
 
+/** Removes an image from the collection. Its number is never reused, and layers showing it keep their pixels. */
 export const removeIngredient = (id: string) => {
   projectStore.commit(document => ({
     ...document,

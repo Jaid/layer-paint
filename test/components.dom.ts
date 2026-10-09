@@ -87,8 +87,9 @@ describe('components', () => {
     expect(tiles.every(tile => tile.getAttribute('draggable') === 'true')).toBe(true)
     expect(tiles.map(tile => tile.querySelector('img')?.getAttribute('src'))).toEqual(['data:image/webp;base64,AAAA', 'data:image/webp;base64,AAAA', 'data:image/webp;base64,AAAA'])
     expect(new Set(tiles.map(tile => tile.dataset.index))).toEqual(new Set(['1', '2', '3']))
-    // Only thumbnails and numbers: no names, groups or section headings.
-    expect(container.textContent).not.toContain('Image 1')
+    // Only thumbnails and numbers: no names, groups or section headings. Names only appear in the tooltips.
+    const visibleText = [...container.querySelectorAll('[data-index] > button')].map(button => button.textContent).join('')
+    expect(visibleText).not.toContain('Image 1')
     expect(container.querySelector('header')).toBeNull()
     act(() => projectStore.reset({
       layers: [],
@@ -163,7 +164,13 @@ describe('components', () => {
     // Selecting the image itself shows the color adjustments and content-aware alignment, but no mask controls.
     const adjustmentSliders = () => [...container.querySelectorAll<HTMLInputElement>('input[type="range"][data-adjustment]')].map(input => input.dataset.adjustment)
     expect(adjustmentSliders()).toEqual(['brightness', 'contrast', 'gamma', 'saturation', 'vibrance', 'temperature'])
-    expect(container.querySelectorAll('input[type="range"]:not([data-adjustment])')).toHaveLength(0)
+    // Besides the adjustments, only the opacity slider belongs to the image.
+    expect([...container.querySelectorAll<HTMLInputElement>('input[type="range"]:not([data-adjustment])')].map(input => input.dataset.testid)).toEqual(['opacity'])
+    fireEvent.change(container.querySelector('[data-testid="opacity"]')!, {target: {value: '35'}})
+    expect(projectStore.state.layers[1].opacity).toBe(0.35)
+    fireEvent.change(container.querySelector('[data-testid="opacity"]')!, {target: {value: '100'}})
+    // Fully opaque layers carry no opacity.
+    expect('opacity' in projectStore.state.layers[1]).toBe(false)
     expect(container.textContent).not.toMatch(/Area|Feather/)
     expect(container.textContent).toContain('White balance')
     const contentAware = container.querySelector<HTMLInputElement>('[data-testid="content-aware"]')!
@@ -194,11 +201,11 @@ describe('components', () => {
     expect(container.textContent).toContain('Feather')
     act(() => maskThumbnails[0].click())
     expect(editorStore.state.tool).toBe('frame')
-    expect(container.querySelectorAll('input[type="range"]:not([data-adjustment])')).toHaveLength(0)
+    expect(container.querySelectorAll('input[type="range"]:not([data-adjustment])')).toHaveLength(1)
     act(() => editorStore.set({selectedLayerId: 'a'}))
     const second = await renderComponent('LayersPanel')
     // The base layer has adjustments too, but no mask and no alignment.
-    expect(second.container.querySelectorAll('input[type="range"]:not([data-adjustment])')).toHaveLength(0)
+    expect(second.container.querySelectorAll('input[type="range"]:not([data-adjustment], [data-testid="opacity"])')).toHaveLength(0)
     expect(second.container.querySelectorAll('input[type="range"][data-adjustment]')).toHaveLength(6)
     expect(second.container.querySelector('[data-testid="content-aware"]')).toBeNull()
     act(() => projectStore.reset({
@@ -283,8 +290,9 @@ describe('components', () => {
     expect(tiles.map(tile => tile.dataset.index)).toEqual(['0', '1'])
     expect(tiles[0].dataset.testid).toBe('frame-view')
     expect(tiles[0].querySelector('canvas')).not.toBeNull()
-    // The live view is not a collection item, so it cannot be removed.
-    expect(tiles[0].querySelector('[aria-label^="Remove"]')).toBeNull()
+    // Tiles carry no remove buttons; deletion lives in the context menu.
+    expect(container.querySelector('[aria-label^="Remove"]')).toBeNull()
+    expect(tiles.every(tile => tile.querySelectorAll('button').length === 1)).toBe(true)
     cleanup()
     act(() => projectStore.reset({
       layers: [],
@@ -319,7 +327,7 @@ describe('components', () => {
     })
     expect(contextMenuStore.state.collectionIndex).toBe(1)
     const items = () => [...menu.container.querySelectorAll('[role="menuitem"]')].map(item => item.textContent)
-    expect(items()).toEqual(['Export'])
+    expect(items()).toEqual(['Export', 'Delete'])
     act(() => contextMenuStore.set({open: false}))
     fireEvent.contextMenu(container.querySelector('[data-testid="frame-view"]')!)
     expect(contextMenuStore.state.collectionIndex).toBe(0)
@@ -332,6 +340,224 @@ describe('components', () => {
       layers: [],
       ingredients: [],
     }))
+  })
+  test('Delete in the context menu of a collection item removes it without renumbering', async () => {
+    const {projectStore} = await import('#src/lib/state.ts')
+    const {openCollectionMenu} = await import('#src/lib/contextMenu.ts')
+    const ingredient = (index: number) => ({
+      id: `ingredient-${index}`,
+      assetId: `missing-${index}`,
+      index,
+      name: `Image ${index}`,
+      kind: 'import' as const,
+      thumbnail: 'data:image/webp;base64,AAAA',
+      createdAt: 0,
+    })
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [ingredient(1), ingredient(2)],
+      nextIngredientIndex: 3,
+    }))
+    const menu = await renderComponent('ContextMenu')
+    act(() => openCollectionMenu(10, 10, 1))
+    const remove = [...menu.container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item => item.textContent === 'Delete')!
+    act(() => remove.click())
+    await act(() => Promise.resolve())
+    expect(projectStore.state.ingredients.map(item => item.index)).toEqual([2])
+    expect(projectStore.state.nextIngredientIndex).toBe(3)
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [],
+    }))
+  })
+  test('collection tiles use rich tooltips instead of title attributes', async () => {
+    const {projectStore} = await import('#src/lib/state.ts')
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [{
+        id: 'ingredient-1',
+        assetId: 'missing-1',
+        index: 1,
+        name: 'Witch',
+        kind: 'generated' as const,
+        thumbnail: 'data:image/webp;base64,AAAA',
+        createdAt: 0,
+      }],
+      nextIngredientIndex: 2,
+    }))
+    const {container} = await renderComponent('Ingredients')
+    for (const tile of container.querySelectorAll<HTMLElement>('[data-index]')) {
+      const button = tile.querySelector('button')!
+      expect(button.hasAttribute('title')).toBe(false)
+      const tooltip = tile.querySelector(`#${CSS.escape(button.getAttribute('interestfor')!)}`)!
+      expect(tooltip.getAttribute('popover')).toBe('hint')
+      expect(tooltip.getAttribute('role')).toBe('tooltip')
+    }
+    expect(container.querySelector('[data-testid="ingredient"] [role="tooltip"]')?.textContent).toContain('Witch')
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [],
+    }))
+  })
+  test('hovering a collection tile marks it for the prompt, the layers and the canvas', async () => {
+    const {editorStore, projectStore} = await import('#src/lib/state.ts')
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [{
+        id: 'ingredient-4',
+        assetId: 'missing-4',
+        index: 4,
+        name: 'Image 4',
+        kind: 'import' as const,
+        thumbnail: 'data:image/webp;base64,AAAA',
+        createdAt: 0,
+      }],
+      nextIngredientIndex: 5,
+    }))
+    const {container} = await renderComponent('Ingredients')
+    const tile = container.querySelector('[data-testid="ingredient"]')!
+    fireEvent.pointerEnter(tile)
+    expect(editorStore.state.hoveredCollectionIndex).toBe(4)
+    fireEvent.pointerLeave(tile)
+    expect(editorStore.state.hoveredCollectionIndex).toBeNull()
+    fireEvent.pointerEnter(container.querySelector('[data-testid="frame-view"]')!)
+    expect(editorStore.state.hoveredCollectionIndex).toBe(0)
+    // Removing a hovered tile clears the highlight.
+    cleanup()
+    expect(editorStore.state.hoveredCollectionIndex).toBeNull()
+    act(() => projectStore.reset({
+      layers: [],
+      ingredients: [],
+    }))
+  })
+  test('layer rows hide via the context menu, keep a show button for hidden layers and cycle revisions', async () => {
+    const {editorStore, projectStore} = await import('#src/lib/state.ts')
+    const {contextMenuStore} = await import('#src/lib/contextMenu.ts')
+    const rect = {
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+    }
+    const evidence = (id: string) => ({
+      id,
+      capturedAt: 0,
+      compiledPrompt: 'a cat',
+      frame: rect,
+      modelId: 'google/gemini-nano-banana-2.1',
+      outputAssetId: `out-${id}`,
+      prompt: 'a cat',
+      quality: '',
+      ratio: '1:1',
+      referenceAssetIds: [],
+      resolution: '',
+    })
+    act(() => {
+      projectStore.reset({
+        ingredients: [],
+        layers: [{
+          id: 'base',
+          assetId: 'base-asset',
+          createdAt: 0,
+          visible: true,
+          rect,
+          kind: 'import',
+          name: 'Base',
+          area: 1,
+          feather: 0,
+        }, {
+          id: 'gen',
+          assetId: 'out-b',
+          createdAt: 0,
+          visible: true,
+          rect,
+          kind: 'generated',
+          name: 'Cat',
+          area: 1,
+          feather: 0,
+          evidence: evidence('b'),
+          revision: 1,
+          revisions: [{
+            assetId: 'out-a',
+            evidence: evidence('a'),
+          }, {
+            assetId: 'out-b',
+            evidence: evidence('b'),
+          }, {
+            assetId: 'out-c',
+            evidence: evidence('c'),
+          }],
+        }],
+      })
+      editorStore.set({
+        layersPanelOpen: true,
+        selectedLayerId: null,
+        tool: 'frame',
+      })
+    })
+    const {container} = await renderComponent('LayersPanel')
+    const rows = () => [...container.querySelectorAll<HTMLElement>('[data-testid="layer-row"]')]
+    // Visible layers have no eye button.
+    expect(rows().some(row => row.querySelector('[aria-label="Hide layer"], [aria-label="Show layer"]'))).toBe(false)
+    const selector = container.querySelector<HTMLElement>('[data-testid="revision-selector"]')!
+    expect(selector.textContent?.replaceAll(/[◂▸]/g, '')).toBe('2/3')
+    act(() => selector.querySelector<HTMLButtonElement>('[aria-label^="Show the next"]')!.click())
+    expect(projectStore.state.layers[1].assetId).toBe('out-c')
+    expect(projectStore.state.layers[1].evidence?.id).toBe('c')
+    expect(container.querySelector('[data-testid="revision-selector"]')!.textContent).toContain('3/3')
+    expect(container.querySelector<HTMLButtonElement>('[aria-label^="Show the next"]')!.disabled).toBe(true)
+    // Hovering the collection item of a buried revision highlights the selector instead of the thumbnail.
+    act(() => projectStore.set(document => ({
+      ...document,
+      ingredients: [{
+        id: 'ingredient-a',
+        assetId: 'out-a',
+        index: 1,
+        name: 'a cat',
+        kind: 'generated' as const,
+        thumbnail: '',
+        createdAt: 0,
+      }, {
+        id: 'ingredient-c',
+        assetId: 'out-c',
+        index: 2,
+        name: 'a cat',
+        kind: 'generated' as const,
+        thumbnail: '',
+        createdAt: 0,
+      }],
+    })))
+    act(() => editorStore.set({hoveredCollectionIndex: 1}))
+    expect(container.querySelector('[data-testid="revision-selector"]')!.hasAttribute('data-highlighted')).toBe(true)
+    expect(container.querySelector('button[data-highlighted]')).toBeNull()
+    act(() => editorStore.set({hoveredCollectionIndex: 2}))
+    expect(container.querySelector('[data-testid="revision-selector"]')!.hasAttribute('data-highlighted')).toBe(false)
+    expect(container.querySelectorAll('button[data-highlighted]')).toHaveLength(1)
+    act(() => editorStore.set({hoveredCollectionIndex: null}))
+    // Undo goes back to the previous revision.
+    act(() => projectStore.undo())
+    expect(projectStore.state.layers[1].assetId).toBe('out-b')
+    // The context menu offers Hide and Reroll.
+    const menu = await renderComponent('ContextMenu')
+    fireEvent.contextMenu(rows()[0])
+    expect(contextMenuStore.state.layerId).toBe('gen')
+    const items = [...menu.container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+    expect(items.map(item => item.textContent)).toContain('Reroll')
+    act(() => items.find(item => item.textContent === 'Hide layer')!.click())
+    await act(() => Promise.resolve())
+    expect(projectStore.state.layers[1].visible).toBe(false)
+    const show = container.querySelector<HTMLButtonElement>('[aria-label="Show layer"]')!
+    expect(show).not.toBeNull()
+    act(() => show.click())
+    expect(projectStore.state.layers[1].visible).toBe(true)
+    expect(container.querySelector('[aria-label="Show layer"]')).toBeNull()
+    act(() => {
+      projectStore.reset({
+        ingredients: [],
+        layers: [],
+      })
+      editorStore.set({selectedLayerId: null})
+    })
   })
   test('the canvas context menu has no Export entry', async () => {
     const {openContextMenu, closeContextMenu} = await import('#src/lib/contextMenu.ts')

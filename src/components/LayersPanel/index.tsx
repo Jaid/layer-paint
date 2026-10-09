@@ -1,17 +1,19 @@
 import type {Layer} from '#src/lib/state.ts'
 
 import clsx from 'clsx'
-import {ChevronDown, Eye, EyeOff, Layers, Lock} from 'lucide-react'
+import {ChevronDown, EyeOff, Layers, Lock} from 'lucide-react'
 import {useEffect, useRef, useState} from 'react'
 
 import IconButton from '#component/IconButton'
 import {selectLayer, updateLayer} from '#src/lib/actions.ts'
 import {adjustmentKeys, toGamma} from '#src/lib/adjustments/index.ts'
 import {assets} from '#src/lib/assets.ts'
+import {useHoveredCollectionAssetId} from '#src/lib/collectionHover.ts'
 import {contentAwareStore, setContentAwareAlignment, supportsContentAwareAlignment} from '#src/lib/contentAware.ts'
 import {openContextMenu} from '#src/lib/contextMenu.ts'
 import {getActiveAlignment} from '#src/lib/layerGeometry.ts'
 import {getMaskAlpha} from '#src/lib/mask.ts'
+import {getRevisionIndex, getRevisions, stepRevision} from '#src/lib/revisions.ts'
 import {defaultGeneratedMask, defaultImportedMask, editorStore, projectStore} from '#src/lib/state.ts'
 import {useStore} from '#src/lib/store/index.ts'
 
@@ -77,6 +79,24 @@ function AdjustmentSlider({layer, property}: {
   }}, {coalesceKey: `${property}:${layer.id}`})
   return <label className={css.slider} title={title ? `${title} · double-click to reset` : 'Double-click to reset'}><span>{label}</span><input aria-label={`${label} of ${layer.name}`} data-adjustment={property} max={100} min={-100} step={1} type='range' value={Math.round(value * 100)} onChange={event => set(Number(event.currentTarget.value) / 100)} onDoubleClick={() => set(0)} /><output>{format(value)}</output></label>
 }
+function OpacitySlider({layer}: {layer: Layer}) {
+  const value = layer.opacity ?? 1
+  const set = (next: number) => updateLayer(layer.id, {opacity: next}, {coalesceKey: `opacity:${layer.id}`})
+  return <label className={css.slider} title='Double-click to reset'><span>Opacity</span><input aria-label={`Opacity of ${layer.name}`} data-testid='opacity' max={100} min={0} step={1} type='range' value={Math.round(value * 100)} onChange={event => set(Number(event.currentTarget.value) / 100)} onDoubleClick={() => set(1)} /><output>{Math.round(value * 100)}%</output></label>
+}
+/** “generation ‹ 2/3 ›”: cycles through the shots of a rerolled generation */
+function RevisionSelector({layer, highlighted}: {
+  highlighted: boolean
+  layer: Layer
+}) {
+  const count = getRevisions(layer).length
+  const index = getRevisionIndex(layer)
+  return <span className={clsx(css.revisions, highlighted && css.highlighted)} data-highlighted={highlighted || undefined} data-testid='revision-selector'>
+    <button className={css.revisionStep} aria-label={`Show the previous revision of ${layer.name}`} disabled={index === 0} type='button' onClick={() => stepRevision(layer.id, -1)}>◂</button>
+    <span className={css.revisionCount}>{index + 1}/{count}</span>
+    <button className={css.revisionStep} aria-label={`Show the next revision of ${layer.name}`} disabled={index >= count - 1} type='button' onClick={() => stepRevision(layer.id, 1)}>▸</button>
+  </span>
+}
 function Adjustments({layer}: {layer: Layer}) {
   return <fieldset className={css.adjustments} data-testid='adjustments'>
     <legend>Adjustments</legend>
@@ -124,6 +144,21 @@ function LayerRow({layer, background, selected}: {
 }) {
   const asset = assets.get(layer.assetId); const tool = useStore(editorStore, state => state.tool)
   const editingMask = selected && tool === 'mask'
+  const rerolling = useStore(editorStore, state => state.jobs.some(job => job.layerId === layer.id && job.status === 'running'))
+  const hoveredAssetId = useHoveredCollectionAssetId()
+  const rowRef = useRef<HTMLLIElement>(null)
+  const revisionCount = getRevisions(layer).length
+  // A hovered collection item points at the thumbnail that shows it, or at the revision selector that hides it.
+  const thumbnailHighlighted = hoveredAssetId !== undefined && layer.assetId === hoveredAssetId
+  const revisionHighlighted = hoveredAssetId !== undefined && !thumbnailHighlighted && Boolean(layer.revisions?.some(revision => revision.assetId === hoveredAssetId))
+  useEffect(() => {
+    if (thumbnailHighlighted || revisionHighlighted) {
+      rowRef.current?.scrollIntoView?.({
+        block: 'nearest',
+        behavior: 'smooth',
+      })
+    }
+  }, [thumbnailHighlighted, revisionHighlighted])
   const [renaming, setRenaming] = useState(false)
   const finish = (value: string) => {
     setRenaming(false); if (value.trim()) {
@@ -143,14 +178,14 @@ function LayerRow({layer, background, selected}: {
     selectLayer(layer.id); editorStore.set({tool: 'mask'})
   }
   return <li
-    className={clsx(css.row, selected && css.selected, !layer.visible && css.hidden)} data-kind={layer.kind} data-testid='layer-row'
+    className={clsx(css.row, selected && css.selected, !layer.visible && css.hidden)} data-kind={layer.kind} data-testid='layer-row' ref={rowRef}
     onContextMenu={event => {
       event.preventDefault(); selectLayer(layer.id); openContextMenu(event.clientX, event.clientY, layer.id)
     }} onMouseEnter={() => editorStore.set({hoveredLayerId: layer.id})}
     onMouseLeave={() => editorStore.set({hoveredLayerId: null})}
   >
     <div className={css.rowMain}>
-      <button className={clsx(css.choose, selected && !editingMask && css.targeted)} aria-pressed={selected && !editingMask} title={`Select ${layer.name}`} type='button' onClick={chooseImage}>
+      <button className={clsx(css.choose, selected && !editingMask && css.targeted, thumbnailHighlighted && css.highlighted)} aria-pressed={selected && !editingMask} data-highlighted={thumbnailHighlighted || undefined} title={`Select ${layer.name}`} type='button' onClick={chooseImage}>
         <span className={css.thumbnail}>{asset && <img alt='' draggable={false} src={asset.url} />}</span>
       </button>
       {background ? <span className={css.maskPlaceholder} aria-hidden /> : <button
@@ -172,9 +207,10 @@ function LayerRow({layer, background, selected}: {
             }
           }}
         /> : <button className={css.name} title={`${layer.name} · double-click to rename`} type='button' onClick={chooseImage} onDoubleClick={() => setRenaming(true)}>{layer.name}</button>}
-        <span className={css.subtitle}>{layer.kind === 'generated' ? <><Lock aria-hidden size={10} />generation</> : 'import'}{background && ' · base'}{layer.evidence?.demo && ' · demo'}{getActiveAlignment(layer) && ' · aligned'}{layer.adjustments && ' · adjusted'}</span>
+        <span className={css.subtitle}>{layer.kind === 'generated' ? <><Lock aria-hidden size={10} />generation</> : 'import'}{revisionCount > 1 && <RevisionSelector highlighted={revisionHighlighted} layer={layer} />}{rerolling && ' · rerolling…'}{background && ' · base'}{layer.evidence?.demo && ' · demo'}{getActiveAlignment(layer) && ' · aligned'}{layer.opacity !== undefined && ` · ${Math.round(layer.opacity * 100)}%`}{layer.adjustments && ' · adjusted'}</span>
       </div>
-      <IconButton icon={layer.visible ? Eye : EyeOff} size={14} title={layer.visible ? 'Hide layer' : 'Show layer'} onClick={() => updateLayer(layer.id, {visible: !layer.visible})} />
+      {/* Hiding lives in the context menu; a hidden layer keeps a quick way back. */}
+      {!layer.visible && <IconButton className={css.show} icon={EyeOff} size={14} title='Show layer' onClick={() => updateLayer(layer.id, {visible: true})} />}
     </div>
     {selected && <div className={css.details}>
       {editingMask && !background && <>
@@ -202,6 +238,7 @@ function LayerRow({layer, background, selected}: {
       </>}
       {layer.kind === 'generated' && !editingMask && <ContentAwareToggle layer={layer} />}
       {layer.kind === 'generated' && <p className={css.note}>Placement is locked to the captured generation frame. {asset ? `${asset.width} × ${asset.height} source pixels.` : ''}</p>}
+      {!editingMask && <OpacitySlider layer={layer} />}
       {!editingMask && <Adjustments layer={layer} />}
       {layer.evidence && <details className={css.provenance}><summary>Request capture</summary><p>{new Date(layer.evidence.capturedAt).toLocaleString()}<br />{layer.evidence.modelId}<br />{layer.evidence.ratio} · {layer.evidence.resolution || layer.evidence.quality || 'default'}<br />{layer.evidence.referenceAssetIds.length} reference image(s){layer.evidence.canvasAssetId ? ' + captured canvas' : ''}</p><pre>{layer.evidence.prompt}</pre><p>The exact input and raw output images are retained in the editable project.</p></details>}
     </div>}

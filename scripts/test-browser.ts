@@ -216,7 +216,7 @@ try {
     })
     await page.click('[data-testid="ingredient"][data-index="1"] button', {button: 'right'})
     await page.waitForSelector('[role="menu"][aria-label="Collection context menu"]')
-    assert.deepEqual(await page.$$eval('[role="menu"] [role="menuitem"]', nodes => nodes.map(node => node.textContent)), ['Export'])
+    assert.deepEqual(await page.$$eval('[role="menu"] [role="menuitem"]', nodes => nodes.map(node => node.textContent)), ['Export', 'Delete'])
     await button('Export')
     const download = await page.waitForFunction(() => (globalThis as unknown as {downloads: Array<{name: string; href: string}>}).downloads[0]).then(handle => handle.jsonValue() as Promise<{name: string; href: string}>)
     const exported = await page.evaluate(async href => {
@@ -305,10 +305,14 @@ try {
       await page.waitForFunction(expected => document.querySelector('[data-testid="generate"]')?.textContent?.trim() === expected, {timeout: 3000}, expected).catch(async () => assert.fail(`Expected “${expected}”, got “${await generateLabel()}”`))
     }
     const all = await page.evaluate(() => globalThis.layerPaint!.editorStore.state.frame)
-    await label({x: area.x - 10 * area.width, y: area.y, width: area.width, height: area.height}, 'Generate')
-    await label({x: area.x + area.width / 2, y: area.y, width: area.width, height: area.height}, 'Extend')
-    await label({x: area.x + area.width / 4, y: area.y + area.height / 4, width: area.width / 4, height: area.height / 4}, 'Patch')
-    await label(all, 'Transform')
+    // The button reserves the width of its longest label, so the frame toggle next to it never moves.
+    const toggleLeft = () => page.$eval('[data-testid="frame-toggle"]', node => node.getBoundingClientRect().left)
+    const positions: number[] = []
+    await label({x: area.x - 10 * area.width, y: area.y, width: area.width, height: area.height}, 'Generate'); positions.push(await toggleLeft())
+    await label({x: area.x + area.width / 2, y: area.y, width: area.width, height: area.height}, 'Extend'); positions.push(await toggleLeft())
+    await label({x: area.x + area.width / 4, y: area.y + area.height / 4, width: area.width / 4, height: area.height / 4}, 'Patch'); positions.push(await toggleLeft())
+    await label(all, 'Transform'); positions.push(await toggleLeft())
+    assert.ok(Math.max(...positions) - Math.min(...positions) < 0.5, `The frame toggle moved: ${positions.join(', ')}`)
     // The frame carries no text label.
     assert.equal(await page.$eval('[data-testid="frame"]', node => node.textContent), '')
     // Frame off: generations span all artwork, padded to the closest ratio.
@@ -351,6 +355,98 @@ try {
     await page.waitForFunction(count => globalThis.layerPaint?.projectStore.state.layers.length === count + 1, {}, layerCount)
     const evidence = await page.evaluate(() => {const layer = globalThis.layerPaint!.projectStore.state.layers.at(-1)!; return {rect: layer.rect, frame: layer.evidence!.frame, prompt: layer.evidence!.prompt, canvas: layer.evidence!.canvasAssetId, output: layer.evidence!.outputAssetId}})
     assert.deepEqual(evidence.rect, frame); assert.deepEqual(evidence.frame, frame); assert.equal(evidence.prompt, 'A localized detail repair'); assert.ok(evidence.canvas && evidence.canvas !== evidence.output)
+  })
+
+  await check('Reroll resends the captured inputs with the current model and adds a revision', async () => {
+    const original = await page.evaluate(() => {const layer = globalThis.layerPaint!.projectStore.state.layers.at(-1)!; return {id: layer.id, assetId: layer.assetId, compiled: layer.evidence!.compiledPrompt, count: globalThis.layerPaint!.projectStore.state.layers.length}})
+    const firstRequest = requests.at(-1)!
+    await page.select('[data-testid="model-select"]', 'x-ai/grok-imagine-image-2.0')
+    // The prompt changes in the meantime, but a reroll repeats the captured request.
+    await page.evaluate(() => globalThis.layerPaint!.editorStore.set({prompt: 'Something else entirely'}))
+    const count = requests.length
+    await page.click('[title="Select A localized detail repair"]', {button: 'right'})
+    await page.waitForSelector('[role="menu"]')
+    await button('Reroll')
+    await page.waitForFunction(id => (globalThis.layerPaint!.projectStore.state.layers.find(layer => layer.id === id)?.revisions?.length ?? 0) === 2, {}, original.id)
+    assert.equal(requests.length, count + 1)
+    const rerolled = requests.at(-1)!
+    assert.equal(rerolled.model, 'x-ai/grok-imagine-image-2.0')
+    assert.equal(rerolled.prompt, original.compiled)
+    assert.deepEqual(rerolled.input_references.map(item => item.image_url.url), firstRequest.input_references.map(item => item.image_url.url), 'A reroll sends the very same input images')
+    const state = await page.evaluate(id => {const h = globalThis.layerPaint!, layer = h.projectStore.state.layers.find(item => item.id === id)!; return {count: h.projectStore.state.layers.length, assetId: layer.assetId, model: layer.evidence!.modelId, revision: layer.revision}}, original.id)
+    assert.equal(state.count, original.count, 'A reroll adds no layer'); assert.notEqual(state.assetId, original.assetId); assert.equal(state.model, 'x-ai/grok-imagine-image-2.0'); assert.equal(state.revision, 1)
+    const selector = () => page.$eval('[data-testid="revision-selector"]', node => node.textContent?.replaceAll(/[◂▸]/g, ''))
+    assert.equal(await selector(), '2/2')
+    await page.click('[aria-label="Show the previous revision of A localized detail repair"]')
+    assert.equal(await selector(), '1/2')
+    assert.equal(await page.evaluate(id => globalThis.layerPaint!.projectStore.state.layers.find(item => item.id === id)!.assetId, original.id), original.assetId)
+    await page.select('[data-testid="model-select"]', 'google/gemini-nano-banana-2.1')
+    await page.evaluate(() => globalThis.layerPaint!.editorStore.set({prompt: 'A localized detail repair'}))
+  })
+
+  await check('Hovering a collection item shows a rich tooltip, unrolls cropped pictures and points out every use', async () => {
+    // The revision that is not shown right now is buried in the revision selector.
+    const buried = await page.evaluate(() => {const h = globalThis.layerPaint!, layer = h.projectStore.state.layers.at(-1)!, assetId = layer.revisions!.find(item => item.assetId !== layer.assetId)!.assetId; return h.projectStore.state.ingredients.find(item => item.assetId === assetId)!.index})
+    await page.evaluate(index => globalThis.layerPaint!.editorStore.set({prompt: `Use ![${index}] here`}), buried)
+    await page.hover(`[data-testid="ingredient"][data-index="${buried}"]`)
+    await page.waitForSelector('[data-testid="revision-selector"][data-highlighted]')
+    await page.waitForSelector('[data-testid="occurrence"]')
+    const highlighted = await page.evaluate(index => [...document.querySelectorAll<HTMLElement>('.monaco-editor .view-lines span')].some(node => Boolean(node.textContent) && `![${index}]`.includes(node.textContent!) && getComputedStyle(node).outlineStyle === 'solid'), buried)
+    assert.ok(highlighted, 'The reference in the prompt lights up')
+    await page.waitForSelector(`[data-testid="ingredient"][data-index="${buried}"] [role="tooltip"]:popover-open`, {timeout: 3000})
+    const [tile, tooltip] = await page.$$eval(`[data-testid="ingredient"][data-index="${buried}"], [data-testid="ingredient"][data-index="${buried}"] [role="tooltip"]`, nodes => nodes.map(node => node.getBoundingClientRect().toJSON() as DOMRect))
+    assert.ok(tooltip.bottom <= tile.top + 1 || tooltip.top >= tile.bottom - 1, 'The tooltip keeps clear of the tile')
+    assert.equal(await page.$eval(`[data-testid="ingredient"][data-index="${buried}"] button`, node => node.hasAttribute('title')), false)
+    await page.mouse.move(5, 5)
+    await page.waitForFunction(() => !document.querySelector('[data-testid="occurrence"]') && !document.querySelector('[data-highlighted]'))
+    // A wide picture is cropped in its tile and unrolls in place.
+    const wide = await page.evaluate(async () => {
+      const h = globalThis.layerPaint!, canvas = new OffscreenCanvas(600, 100), context = canvas.getContext('2d')!
+      context.fillStyle = '#3a6'; context.fillRect(0, 0, 600, 100); context.fillStyle = '#e33'; context.fillRect(0, 0, 60, 100)
+      const [ingredient] = await h.actions.addIngredients([new File([await canvas.convertToBlob({type: 'image/png'})], 'wide.png', {type: 'image/png'})])
+      return ingredient.index
+    })
+    const wideTile = `[data-testid="ingredient"][data-index="${wide}"]`
+    assert.equal(await page.$eval(wideTile, node => (node as HTMLElement).dataset.crop), 'horizontal')
+    await page.hover(wideTile)
+    await page.waitForSelector(`${wideTile} [data-testid="unrolled"]:popover-open`)
+    const unrolled = await page.$eval(`${wideTile} [data-testid="unrolled"]`, node => node.getBoundingClientRect().toJSON() as DOMRect)
+    const wideBounds = await page.$eval(wideTile, node => node.getBoundingClientRect().toJSON() as DOMRect)
+    assert.ok(Math.abs(unrolled.width / unrolled.height - 6) < 0.05, `The unrolled picture is complete: ${unrolled.width} × ${unrolled.height}`)
+    assert.ok(Math.abs(unrolled.height - wideBounds.height) < 1 && unrolled.width > wideBounds.width)
+    await page.mouse.move(5, 5)
+    await page.waitForFunction(selector => !document.querySelector(`${selector} [data-testid="unrolled"]:popover-open`), {}, wideTile)
+    // Delete lives in the context menu now.
+    await page.click(`${wideTile} button`, {button: 'right'})
+    await page.waitForSelector('[role="menu"][aria-label="Collection context menu"]')
+    await button('Delete')
+    await page.waitForFunction(selector => !document.querySelector(selector), {}, wideTile)
+    assert.equal(await page.evaluate(() => globalThis.layerPaint!.editorStore.state.hoveredCollectionIndex), null)
+    await page.evaluate(() => globalThis.layerPaint!.editorStore.set({prompt: 'A localized detail repair'}))
+  })
+
+  await check('Layer opacity is an image control and renders translucently; hiding moved into the context menu', async () => {
+    const id = await page.evaluate(() => globalThis.layerPaint!.projectStore.state.layers.at(-1)!.id)
+    assert.equal(await page.$('[aria-label="Hide layer"]'), null, 'Visible layers have no eye button')
+    await page.click('[title="Select A localized detail repair"]')
+    const slider = (await page.waitForSelector('[data-testid="opacity"]'))!
+    await slider.evaluate(node => {const input = node as HTMLInputElement; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '50'); input.dispatchEvent(new Event('input', {bubbles: true}))})
+    await page.waitForFunction(id => globalThis.layerPaint!.projectStore.state.layers.find(item => item.id === id)!.opacity === 0.5, {}, id)
+    const alpha = await page.evaluate(id => {
+      const h = globalThis.layerPaint!, layer = h.projectStore.state.layers.find(item => item.id === id)!
+      const {canvas} = h.renderRegion({layers: [layer], region: layer.rect, size: {width: 8, height: 8}, measureEmpty: false})
+      return canvas.getContext('2d')!.getImageData(4, 4, 1, 1).data[3]
+    }, id)
+    assert.ok(Math.abs(alpha - 128) <= 2, `alpha ${alpha}`)
+    await page.evaluate(id => globalThis.layerPaint!.actions.updateLayer(id, {opacity: 1}), id)
+    await page.click('[title="Select A localized detail repair"]', {button: 'right'})
+    await page.waitForSelector('[role="menu"]')
+    await button('Hide layer')
+    await page.waitForSelector('[aria-label="Show layer"]')
+    await page.click('[aria-label="Show layer"]')
+    await page.waitForFunction(id => globalThis.layerPaint!.projectStore.state.layers.find(item => item.id === id)!.visible, {}, id)
+    assert.equal(await page.$('[aria-label="Show layer"]'), null)
+    await page.evaluate(() => {globalThis.layerPaint!.actions.selectLayer(null); globalThis.layerPaint!.editorStore.set({tool: 'frame'})})
   })
 
   await check('Content-aware alignment is analyzed once and then toggles instantly', async () => {

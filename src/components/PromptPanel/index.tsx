@@ -19,6 +19,8 @@ import {useGenerationMode} from '#src/lib/useGenerationMode.ts'
 import css from './style.module.sass'
 
 const vendors = [...new Set(models.map(model => model.vendor))]
+/** the two longest labels reserve the width of the generate button, so switching modes never shifts the layout */
+const [widestTitle, secondWidestTitle] = Object.values(generationModeTitles).toSorted((a, b) => b.length - a.length)
 export default function PromptPanel() {
   const editor = useStore(editorStore); const storage = useStore(persistenceStore); const catalog = useStore(catalogStore)
   const model = getModel(editor.modelId); const running = editor.jobs.filter(job => job.status === 'running').length
@@ -41,7 +43,7 @@ export default function PromptPanel() {
           ...event.currentTarget.checked && !editorStore.state.prompt.trim() ? {prompt: 'A moonlit mountain observatory above a sea of clouds'} : {},
         })}
       />Demo mode <span>no credits</span></label></div>
-      <div className={css.generateRow}>{editor.sessionCost > 0 ? <span className={css.meta} title='Actual reported OpenRouter cost for this browser session'>$ {editor.sessionCost.toFixed(4)}</span> : editor.demoMode && <span className={css.meta}>Procedural preview · not AI</span>}<IconButton active={editor.frameEnabled} className={css.frameToggle} data-testid='frame-toggle' icon={Frame} size={17} title={editor.frameEnabled ? 'Frame on · generations use the frame. Click to span all canvas content instead.' : 'Frame off · generations span all canvas content. Click to use the frame.'} onClick={() => setFrameEnabled(!editor.frameEnabled)} /><button className={css.generate} data-mode={mode} data-testid='generate' disabled={!storage.hydrated || running >= 2} title='Ctrl+Enter' type='button' onBlur={() => charged(false)} onClick={() => void generate()} onFocus={() => charged(true)} onPointerEnter={() => charged(true)} onPointerLeave={() => charged(false)}><Sparkles aria-hidden size={16} /><span>{generationModeTitles[mode]}{editor.demoMode && ' demo'}</span>{running > 0 && <span className={css.badge}>{running}</span>}</button></div>
+      <div className={css.generateRow}>{editor.sessionCost > 0 ? <span className={css.meta} title='Actual reported OpenRouter cost for this browser session'>$ {editor.sessionCost.toFixed(4)}</span> : editor.demoMode && <span className={css.meta}>Procedural preview · not AI</span>}<IconButton active={editor.frameEnabled} className={css.frameToggle} data-testid='frame-toggle' icon={Frame} size={17} title={editor.frameEnabled ? 'Frame on · generations use the frame. Click to span all canvas content instead.' : 'Frame off · generations span all canvas content. Click to use the frame.'} onClick={() => setFrameEnabled(!editor.frameEnabled)} /><button className={css.generate} data-mode={mode} data-testid='generate' disabled={!storage.hydrated || running >= 2} title='Ctrl+Enter' type='button' onBlur={() => charged(false)} onClick={() => void generate()} onFocus={() => charged(true)} onPointerEnter={() => charged(true)} onPointerLeave={() => charged(false)}><Sparkles aria-hidden size={16} /><span className={css.generateLabel} data-reserve-a={`${widestTitle}${editor.demoMode ? ' demo' : ''}`} data-reserve-b={`${secondWidestTitle}${editor.demoMode ? ' demo' : ''}`}><span>{generationModeTitles[mode]}{editor.demoMode && ' demo'}</span></span>{running > 0 && <span className={css.badge}>{running}</span>}</button></div>
     </footer>
   </div>
 }

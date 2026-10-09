@@ -66,7 +66,8 @@
       color: #853657
 
 .hidden .rowMain
-  opacity: 40%
+  > :not(.show)
+    opacity: 40%
 
 .rowMain
   display: flex
@@ -87,8 +88,52 @@
   border-radius: 6px
   outline: 1px solid transparent
   outline-offset: 1px
+  transition: outline-color 120ms, box-shadow 120ms
   &.targeted
     outline-color: #b59d69
+
+// points out where the hovered collection item is used
+.highlighted
+  outline: 2px solid oklch(85% 0.15 200) !important
+  outline-offset: 1px
+  box-shadow: 0 0 14px oklch(85% 0.15 200 / 55%)
+  @include light
+    outline-color: oklch(52% 0.15 220) !important
+    box-shadow: 0 0 12px oklch(52% 0.15 220 / 40%)
+
+.revisions
+  display: inline-flex
+  align-items: center
+  margin-left: 2px
+  border-radius: 4px
+  font-variant-numeric: tabular-nums
+  &.highlighted
+    outline-width: 1px
+
+.revisionStep
+  display: grid
+  place-items: center
+  width: 13px
+  height: 13px
+  padding: 0
+  border: 0
+  border-radius: 3px
+  color: inherit
+  background: transparent
+  font: inherit
+  font-size: 10px
+  line-height: 1
+  &:hover:not(:disabled)
+    background: rgb(255 255 255 / 12%)
+    @include light
+      background: rgb(0 0 0 / 8%)
+  // the missing direction keeps its space, so the count does not jump
+  &:disabled
+    visibility: hidden
+
+.revisionCount
+  min-width: 2.6em
+  text-align: center
 
 .thumbnail
   display: grid

@@ -1,13 +1,17 @@
 import {createCanvas, encodeCanvas, getContext} from './image.ts'
 
 /** Deliberately labeled procedural demo, never presented as an AI/provider response. */
-export async function createDemoImage(prompt: string, aspect = 1, source?: OffscreenCanvas, signal?: AbortSignal): Promise<Blob> {
+export async function createDemoImage(prompt: string, aspect = 1, source?: ImageBitmap | OffscreenCanvas, signal?: AbortSignal, variation = 0): Promise<Blob> {
   const side = 1536
   const canvas = createCanvas(aspect >= 1 ? side : side * aspect, aspect >= 1 ? side / aspect : side)
   const ctx = getContext(canvas); const w = canvas.width; const h = canvas.height
   let seed = 2_166_136_261
   for (const char of prompt) {
     seed = Math.imul(seed ^ char.charCodeAt(0), 16_777_619) >>> 0
+  }
+  // Rerolls of the same prompt look different.
+  if (variation) {
+    seed = Math.imul(seed ^ variation, 16_777_619) >>> 0
   }
   const random = () => {
     seed = Math.imul(seed, 1_664_525) + 1_013_904_223 >>> 0; return seed / 4_294_967_296

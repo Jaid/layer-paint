@@ -36,6 +36,14 @@ export type LayerAlignment = Placement & {
   applied: boolean
 }
 
+/** one shot of a generation request; rerolls add further revisions with the same prompt and input images */
+export type GenerationRevision = {
+  alignment?: LayerAlignment
+  assetId: string
+  evidence: GenerationEvidence
+  modelId?: string
+}
+
 export type Layer = MaskSettings & {
   /** color adjustments, applied non-destructively by the compositor */
   adjustments?: Adjustments
@@ -51,9 +59,19 @@ export type Layer = MaskSettings & {
   /** generation metadata */
   modelId?: string
   name: string
+  /** 0–1, fully opaque when absent */
+  opacity?: number
   prompt?: string
   /** placement in world units */
   rect: Rect
+  /** index of the shown revision in `revisions` */
+  revision?: number
+  /**
+   * every shot of this generation in creation order, present once it was rerolled
+   *
+   * The top-level assetId, evidence, modelId and alignment always describe the shown revision; its slot in this list may lag behind and is refreshed on every switch.
+   */
+  revisions?: ReadonlyArray<GenerationRevision>
   rotation?: number
   visible: boolean
 }
@@ -93,6 +111,8 @@ export type Job = {
   controller: AbortController
   error?: string
   id: string
+  /** the generated layer this job adds a revision to, for rerolls */
+  layerId?: string
   modelId: string
   prompt: string
   rect: Rect
@@ -114,6 +134,8 @@ export type EditorState = {
   /** When off, generations span all canvas content, covered by the closest supported ratio. */
   frameEnabled: boolean
   generationHover: boolean
+  /** collection number of the hovered collection tile; 0 is the live frame view */
+  hoveredCollectionIndex: number | null
   hoveredLayerId: string | null
   jobs: ReadonlyArray<Job>
   layersPanelOpen: boolean
@@ -151,6 +173,7 @@ const initialRatio = resolveInitialRatio()
 export const createInitialEditorState = (): EditorState => ({
   tool: 'frame',
   hoveredLayerId: null,
+  hoveredCollectionIndex: null,
   generationHover: false,
   demoMode: false,
   exportMode: 'detail',

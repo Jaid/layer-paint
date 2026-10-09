@@ -1,7 +1,7 @@
 import type {Adjustments} from './adjustments/index.ts'
 import type {Rect} from './geometry.ts'
 import type {PersistedEditorState} from './persistence.ts'
-import type {GenerationEvidence, Ingredient, Layer, LayerAlignment, ProjectDocument} from './state.ts'
+import type {GenerationEvidence, GenerationRevision, Ingredient, Layer, LayerAlignment, ProjectDocument} from './state.ts'
 
 import {adjustmentKeys, normalizeAdjustments} from './adjustments/index.ts'
 import {findModel} from './models/index.ts'
@@ -68,6 +68,9 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
     if (v.featherAllEdges !== undefined) {
       result.featherAllEdges = bool(v.featherAllEdges)
     }
+    if (v.opacity !== undefined) {
+      result.opacity = number(v.opacity, 0, 1)
+    }
     if (v.modelId !== undefined) {
       result.modelId = text(v.modelId)
     }
@@ -92,6 +95,19 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
     const captured = evidence(v.evidence)
     if (captured) {
       result.evidence = captured
+    }
+    if (v.revisions !== undefined) {
+      if (result.kind !== 'generated' || !result.evidence || !Array.isArray(v.revisions) || v.revisions.length < 1 || v.revisions.length > 1000) {
+        return fail()
+      }
+      result.revisions = v.revisions.map(revision)
+      const shown = number(v.revision ?? 0, 0, result.revisions.length - 1)
+      if (!Number.isSafeInteger(shown)) {
+        return fail()
+      }
+      result.revision = shown
+    } else if (v.revision !== undefined) {
+      return fail()
     }
     return result
   })
@@ -130,20 +146,27 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
     ...value.layersNumbered === true ? {layersNumbered: true} : {},
   }
 }
+const addEvidenceAssetIds = (ids: Set<string>, captured: GenerationEvidence | undefined) => {
+  if (!captured) {
+    return
+  }
+  if (captured.canvasAssetId) {
+    ids.add(captured.canvasAssetId)
+  }
+  ids.add(captured.outputAssetId)
+  for (const id of captured.referenceAssetIds) {
+    ids.add(id)
+  }
+}
 export function collectDocumentAssetIds(documents: Iterable<ProjectDocument>) {
   const ids = new Set<string>
   for (const document of documents) {
     for (const layer of document.layers) {
       ids.add(layer.assetId)
-      if (!layer.evidence) {
-        continue
-      }
-      if (layer.evidence.canvasAssetId) {
-        ids.add(layer.evidence.canvasAssetId)
-      }
-      ids.add(layer.evidence.outputAssetId)
-      for (const id of layer.evidence.referenceAssetIds) {
-        ids.add(id)
+      addEvidenceAssetIds(ids, layer.evidence)
+      for (const item of layer.revisions ?? []) {
+        ids.add(item.assetId)
+        addEvidenceAssetIds(ids, item.evidence)
       }
     }
     for (const ingredient of document.ingredients) {
@@ -190,6 +213,17 @@ function alignment(v: unknown): LayerAlignment {
     y: number(v.y, -10, 10),
     scale: number(v.scale, 0.01, 100),
     applied: bool(v.applied),
+  }
+}
+function revision(v: unknown): GenerationRevision {
+  if (!isRecord(v)) {
+    return fail()
+  }
+  return {
+    assetId: text(v.assetId),
+    evidence: evidence(v.evidence) ?? fail(),
+    ...v.modelId === undefined ? {} : {modelId: text(v.modelId)},
+    ...v.alignment === undefined ? {} : {alignment: alignment(v.alignment)},
   }
 }
 function parseAdjustments(v: unknown) {

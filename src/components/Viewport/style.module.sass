@@ -30,6 +30,28 @@
 .generatedSelection
   outline-color: #8adeb4
 
+// where the hovered collection item is used
+.occurrence
+  position: absolute
+  box-sizing: border-box
+  pointer-events: none
+  transform-origin: center
+  outline: 2px solid oklch(85% 0.15 200)
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 55%), 0 0 18px oklch(85% 0.15 200 / 45%), inset 0 0 0 1px rgb(0 0 0 / 55%)
+  @include light
+    outline-color: oklch(52% 0.15 220)
+  animation: occurrencePulse 1.2s ease-in-out infinite alternate
+  @include static
+    animation: none
+
+// an unselected revision or a hidden layer
+.buried, .hiddenOccurrence
+  outline-style: dashed
+
+@keyframes occurrencePulse
+  to
+    outline-offset: 2px
+
 .maskOutline, .featherOutline
   position: absolute
   box-sizing: border-box
