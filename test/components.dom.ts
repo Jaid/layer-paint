@@ -367,7 +367,7 @@ describe('components', () => {
     expect(rotation.closest('label')?.textContent).toStartWith('Rotation')
     expect(flip.closest('label')?.textContent).toStartWith('Flip')
     expect([...rotation.options].map(option => option.textContent)).toEqual(['0°', '90° clockwise', '90° counterclockwise', '180°'])
-    expect([...flip.options].map(option => option.textContent)).toEqual(['None', 'Horizontal', 'Vertical', 'Both'])
+    expect([...flip.options].map(option => option.textContent)).toEqual(['None', 'Horizontal', 'Vertical'])
     expect(rotation.value).toBe('270')
     expect(flip.value).toBe('vertical')
     // Without the original pixels there is nothing to transform.

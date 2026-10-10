@@ -138,12 +138,23 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
     if (v.rotation !== undefined) {
       result.rotation = isRotation(v.rotation) && v.rotation !== 0 ? v.rotation : fail()
     }
-    if (v.flip !== undefined) {
-      result.flip = isFlip(v.flip) && v.flip !== 'none' ? v.flip : fail()
-    }
     // The original image is kept exactly while a rotation or flip is applied.
     if (v.sourceAssetId !== undefined) {
       result.sourceAssetId = text(v.sourceAssetId)
+    }
+    if (v.flip === 'both') {
+      // The former flip in both directions shows the same pixels as an additional half turn.
+      const rotation = ((result.rotation ?? 0) + 180) % 360
+      if (rotation === 0) {
+        // 180° with both flips was the original image itself.
+        delete result.rotation
+        result.assetId = result.sourceAssetId ?? result.assetId
+        delete result.sourceAssetId
+      } else {
+        result.rotation = isRotation(rotation) && rotation !== 0 ? rotation : fail()
+      }
+    } else if (v.flip !== undefined) {
+      result.flip = isFlip(v.flip) && v.flip !== 'none' ? v.flip : fail()
     }
     if (Boolean(result.sourceAssetId) !== Boolean(result.rotation || result.flip)) {
       return fail()

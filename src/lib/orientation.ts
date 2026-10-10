@@ -4,7 +4,8 @@ import type {Rect, Size} from './geometry.ts'
 export const rotations = [0, 90, 270, 180] as const
 export type Rotation = typeof rotations[number]
 
-export const flips = ['none', 'horizontal', 'vertical', 'both'] as const
+/** Mirroring both ways is left out because it is the same as a half turn. */
+export const flips = ['none', 'horizontal', 'vertical'] as const
 export type Flip = typeof flips[number]
 
 /**
@@ -33,7 +34,6 @@ export const flipTitles: Record<Flip, string> = {
   none: 'None',
   horizontal: 'Horizontal',
   vertical: 'Vertical',
-  both: 'Both',
 }
 
 export const isRotation = (value: unknown): value is Rotation => rotations.includes(value as Rotation)
@@ -42,7 +42,7 @@ export const isFlip = (value: unknown): value is Flip => flips.includes(value as
 /**
  * The orientation as one of the eight symmetries of a rectangle: the original is mirrored left to right first if `mirrored`, then turned clockwise by `turns` quarter turns.
  *
- * Several orientations describe the same pixels, for example 180° with both flips is the original image.
+ * Several orientations describe the same pixels, for example 90° clockwise with a horizontal flip equals 90° counterclockwise with a vertical flip.
  */
 export type Symmetry = {
   mirrored: boolean
@@ -72,12 +72,6 @@ export const getSymmetry = ({rotation, flip}: Orientation): Symmetry => {
       return {
         turns: quarterTurns(2 - turns),
         mirrored: true,
-      }
-    }
-    case 'both': {
-      return {
-        turns: quarterTurns(turns + 2),
-        mirrored: false,
       }
     }
   }
