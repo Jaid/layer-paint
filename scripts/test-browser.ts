@@ -683,7 +683,7 @@ try {
     }
     await openMenu()
     assert.deepEqual(await page.$eval('[data-testid="collection-rotation"]', node => [...(node as HTMLSelectElement).options].map(option => option.textContent)), ['0°', '90° clockwise', '90° counterclockwise', '180°'])
-    assert.deepEqual(await page.$eval('[data-testid="collection-flip"]', node => [...(node as HTMLSelectElement).options].map(option => option.textContent)), ['None', 'Horizontal', 'Vertical', 'Both'])
+    assert.deepEqual(await page.$eval('[data-testid="collection-flip"]', node => [...(node as HTMLSelectElement).options].map(option => option.textContent)), ['None', 'Horizontal', 'Vertical'])
     await page.select('[data-testid="collection-rotation"]', '90')
     await page.waitForFunction(() => globalThis.layerPaint!.projectStore.state.ingredients[0].rotation === 90)
     // The menu stays open, so the flip can be set right away.

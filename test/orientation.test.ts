@@ -18,10 +18,10 @@ const orient = (grid: Grid, {rotation, flip}: Orientation) => {
   for (let turn = 0; turn < rotation / 90; turn++) {
     result = turnClockwise(result)
   }
-  if (flip === 'horizontal' || flip === 'both') {
+  if (flip === 'horizontal') {
     result = mirrorHorizontally(result)
   }
-  if (flip === 'vertical' || flip === 'both') {
+  if (flip === 'vertical') {
     result = mirrorVertically(result)
   }
   return result
@@ -76,9 +76,17 @@ describe('orientation', () => {
   })
   test('equivalent orientations collapse to the same symmetry', () => {
     expect(isIdentitySymmetry(getSymmetry({
-      rotation: 180,
-      flip: 'both',
+      rotation: 0,
+      flip: 'none',
     }))).toBe(true)
+    // A horizontal flip after a half turn is the same as a vertical flip alone.
+    expect(getSymmetry({
+      rotation: 180,
+      flip: 'horizontal',
+    })).toEqual(getSymmetry({
+      rotation: 0,
+      flip: 'vertical',
+    }))
     expect(getSymmetry({
       rotation: 90,
       flip: 'horizontal',
@@ -88,7 +96,7 @@ describe('orientation', () => {
     }))
     expect(swapsAxes({
       rotation: 270,
-      flip: 'both',
+      flip: 'vertical',
     })).toBe(true)
     expect(swapsAxes({
       rotation: 180,
@@ -245,20 +253,22 @@ describe('collection entry orientation', () => {
     expect(restored.ingredients[0]).toEqual(ingredient)
     expect(restored.layers[0]).toEqual(document.layers[0])
   })
-  test('an orientation that shows the original pixels keeps the layers untouched', () => {
-    const next = withIngredientOrientation(document, 'ingredient', 'original', {
-      rotation: 180,
-      flip: 'both',
-    }, {
-      assetId: 'original',
-      thumbnail: 'thumbnail-original',
-    })
-    expect(next.layers).toBe(document.layers)
-    expect(next.ingredients[0]).toMatchObject({
-      rotation: 180,
-      flip: 'both',
-      sourceAssetId: 'original',
-    })
+  test('every orientation is distinct, so no flip duplicates a rotation', () => {
+    const keys = orientations.map(orientation => JSON.stringify(orient(source, orientation)))
+    // 4 rotations × 3 flips reach all 8 symmetries of a rectangle.
+    expect(new Set(keys).size).toBe(8)
+    for (const rotation of rotations) {
+      for (const flip of ['horizontal', 'vertical'] as const) {
+        const flipped = JSON.stringify(orient(source, {
+          rotation,
+          flip,
+        }))
+        expect(rotations.map(other => JSON.stringify(orient(source, {
+          rotation: other,
+          flip: 'none',
+        })))).not.toContain(flipped)
+      }
+    }
   })
   test('nothing changes for a missing entry or another original', () => {
     const image = {
@@ -297,5 +307,33 @@ describe('collection entry orientation', () => {
       rotation: undefined,
       flip: undefined,
     }))).toThrow()
+  })
+  test('a former flip in both directions opens as an additional half turn', () => {
+    const both = (patch: Partial<Record<keyof Ingredient, unknown>>) => parseProjectDocument({
+      ...document,
+      ingredients: [{
+        ...ingredient,
+        assetId: 'oriented',
+        sourceAssetId: 'original',
+        flip: 'both',
+        ...patch,
+      }],
+    }).ingredients[0]
+    expect(both({})).toMatchObject({
+      assetId: 'oriented',
+      sourceAssetId: 'original',
+      rotation: 180,
+    })
+    expect(both({rotation: 90})).toMatchObject({rotation: 270})
+    expect(both({rotation: 270})).toMatchObject({rotation: 90})
+    expect(both({rotation: 90}).flip).toBeUndefined()
+    // 180° with both flips was the original image.
+    expect(both({
+      assetId: 'original',
+      rotation: 180,
+    })).toEqual({
+      ...ingredient,
+      thumbnail: '',
+    })
   })
 })
